@@ -1,0 +1,14 @@
+{
+  "name": "smart-home-tracker",
+  "version": "1.0.0",
+  "description": "Smart Home Maintenance and Service Tracker",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "dev": "concurrently \"cd server && npm run dev\" \"cd client && npm run dev\"",
+    "start": "cd server && node index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
