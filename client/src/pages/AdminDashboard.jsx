@@ -174,6 +174,33 @@ export default function AdminDashboard() {
                 </div>
             </div>
 
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-4">Platform Revenue by Month</h3>
+                    <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={stats?.expensesByMonth?.reverse() || []}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                            <YAxis tickFormatter={value => `₹${value}`} tick={{ fontSize: 11 }} />
+                            <Tooltip formatter={value => `₹${Number(value).toFixed(0)}`} />
+                            <Bar dataKey="total_cost" fill="#10b981" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-4">Revenue by Category</h3>
+                    <ResponsiveContainer width="100%" height={250}>
+                        <PieChart>
+                            <Pie data={stats?.expensesByCategory || []} dataKey="total_cost" nameKey="category" cx="50%" cy="50%" outerRadius={80} innerRadius={50} label>
+                                {(stats?.expensesByCategory || []).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                            </Pie>
+                            <Tooltip formatter={value => `₹${Number(value).toFixed(0)}`} />
+                            <Legend />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-white rounded-xl border border-slate-200 p-5">
                     <h3 className="font-semibold text-navy-900 mb-4">Properties</h3>

@@ -133,12 +133,29 @@ router.get('/stats', authMiddleware, isAdmin, async (req, res) => {
       ORDER BY sl.created_at DESC LIMIT 10
     `);
 
+        const expensesByMonthRes = await db.query(`
+            SELECT TO_CHAR(created_at::date, 'YYYY-MM') as month, SUM(cost) as total_cost
+            FROM service_logs
+            WHERE status = 'completed'
+            GROUP BY month ORDER BY month DESC LIMIT 12
+        `);
+
+        const expensesByCategoryRes = await db.query(`
+            SELECT a.category, SUM(sl.cost) as total_cost
+            FROM service_logs sl
+            JOIN appliances a ON sl.appliance_id = a.id
+            WHERE sl.status = 'completed'
+            GROUP BY a.category ORDER BY total_cost DESC
+        `);
+
         res.json({
             totalUsers, activeUsers, premiumUsers, totalProperties, totalAppliances,
             totalServices, totalVendors: 0, totalSchedules, totalProviders, totalRevenue, subscriptionRevenue: 0,
             expenseByYear: expenseByYearRes.rows, jobsByMonth: jobsByMonthRes.rows, 
             usersByRole: usersByRoleRes.rows, recentServices: recentServicesRes.rows, 
-            providerPerformance: providerPerformanceRes.rows
+            providerPerformance: providerPerformanceRes.rows,
+            expensesByMonth: expensesByMonthRes.rows,
+            expensesByCategory: expensesByCategoryRes.rows
         });
     } catch (error) {
         console.error('Admin stats error:', error);

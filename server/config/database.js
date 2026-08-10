@@ -217,22 +217,29 @@ async function seedDatabase() {
           [applianceId, provider.id, nextDue.toISOString().split('T')[0], 90 + (aIdx * 30)]
         );
 
-        // Service Log (Past)
-        const pastDate = new Date();
-        pastDate.setDate(pastDate.getDate() - (30 * (aIdx + 1)));
-        
-        const service = await pool.query(
-          `INSERT INTO service_logs(appliance_id,user_id,provider_id,status,cost,created_at)
-           VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
-          [applianceId, home.id, provider.id, "completed", 150 + (i * 20), pastDate.toISOString()]
-        );
+        // Service Log (Past) - Generate 3 to 6 logs per appliance over last 12 months
+        const numLogs = 3 + Math.floor(Math.random() * 4);
+        for (let lIdx = 0; lIdx < numLogs; lIdx++) {
+            const pastDate = new Date();
+            // Random day in the last 12 months
+            pastDate.setDate(pastDate.getDate() - Math.floor(Math.random() * 365));
+            const cost = 150 + Math.floor(Math.random() * 500) + (i * 20);
+            
+            const service = await pool.query(
+              `INSERT INTO service_logs(appliance_id,user_id,provider_id,status,cost,created_at)
+               VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
+              [applianceId, home.id, provider.id, "completed", cost, pastDate.toISOString()]
+            );
 
-        // Feedback
-        await pool.query(
-          `INSERT INTO feedback(service_log_id,homeowner_id,rating,comment)
-           VALUES($1,$2,$3,$4)`,
-          [service.rows[0].id, home.id, 4 + (i % 2), "Great professional service!"]
-        );
+            // Feedback
+            if (Math.random() > 0.3) {
+                await pool.query(
+                  `INSERT INTO feedback(service_log_id,homeowner_id,rating,comment)
+                   VALUES($1,$2,$3,$4)`,
+                  [service.rows[0].id, home.id, 3 + Math.floor(Math.random() * 3), "Great professional service!"]
+                );
+            }
+        }
       }
     }
 
