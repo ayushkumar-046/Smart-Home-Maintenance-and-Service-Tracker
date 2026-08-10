@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import { HiOutlineBell } from 'react-icons/hi';
 
 export default function NotificationBell() {
@@ -25,7 +25,7 @@ export default function NotificationBell() {
 
     async function fetchNotifications() {
         try {
-            const { data } = await axios.get('/api/notifications');
+            const { data } = await api.get('/api/notifications');
             setNotifications(data.notifications.slice(0, 5));
             setUnreadCount(data.unreadCount);
         } catch { }
@@ -33,7 +33,7 @@ export default function NotificationBell() {
 
     async function markRead(id) {
         try {
-            await axios.put(`/api/notifications/${id}/read`);
+            await api.put(`/api/notifications/${id}/read`);
             fetchNotifications();
         } catch { }
     }

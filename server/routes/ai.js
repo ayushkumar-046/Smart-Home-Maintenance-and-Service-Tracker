@@ -163,4 +163,94 @@ router.post('/optimize', authMiddleware, requirePremium, async (req, res) => {
     }
 });
 
+// GET /api/ai/analytics - User-specific maintenance analytics
+router.get('/analytics', authMiddleware, requirePremium, async (req, res) => {
+        try {
+                const isAdmin = req.user.role === 'admin';
+                const scopeJoin = isAdmin ? 'JOIN properties p ON a.property_id = p.id' : 'JOIN properties p ON a.property_id = p.id AND p.user_id = ?';
+                const userParams = isAdmin ? [] : [req.user.id];
+
+                const monthlyExpenses = db.prepare(`
+            SELECT TO_CHAR(sl.completed_date::date, 'YYYY-MM') as month,
+                         COALESCE(SUM(sl.cost), 0) as total_cost,
+                         COUNT(*) as service_count
+            FROM service_logs sl
+            JOIN appliances a ON sl.appliance_id = a.id
+            ${scopeJoin}
+            WHERE sl.status = 'completed' AND sl.completed_date IS NOT NULL
+            GROUP BY month
+            ORDER BY month DESC
+            LIMIT 12
+        `).all(...userParams);
+
+                const yearlyExpenses = db.prepare(`
+            SELECT EXTRACT(YEAR FROM sl.completed_date::date)::text as year,
+                         COALESCE(SUM(sl.cost), 0) as total_cost,
+                         COUNT(*) as service_count
+            FROM service_logs sl
+            JOIN appliances a ON sl.appliance_id = a.id
+            ${scopeJoin}
+            WHERE sl.status = 'completed' AND sl.completed_date IS NOT NULL
+            GROUP BY year
+            ORDER BY year DESC
+        `).all(...userParams);
+
+                const categoryBreakdown = db.prepare(`
+            SELECT a.category, COALESCE(SUM(sl.cost), 0) as total_cost, COUNT(*) as service_count
+            FROM service_logs sl
+            JOIN appliances a ON sl.appliance_id = a.id
+            ${scopeJoin}
+            WHERE sl.status = 'completed'
+            GROUP BY a.category
+            ORDER BY total_cost DESC
+        `).all(...userParams);
+
+                const totals = db.prepare(`
+            SELECT
+                COALESCE(SUM(sl.cost), 0) as total_cost,
+                COUNT(*) as total_services,
+                COALESCE(AVG(CASE WHEN sl.status = 'completed' THEN sl.cost END), 0) as average_service_cost
+            FROM service_logs sl
+            JOIN appliances a ON sl.appliance_id = a.id
+            ${scopeJoin}
+            WHERE sl.status = 'completed'
+        `).get(...userParams);
+
+                res.json({
+                        monthlyExpenses,
+                        yearlyExpenses,
+                        categoryBreakdown,
+                        totals
+                });
+        } catch (error) {
+                console.error('AI analytics error:', error);
+                res.status(500).json({ error: 'Failed to fetch analytics.' });
+        }
+});
+
+// POST /api/ai/ratings-analysis - Ratings analysis
+router.post('/ratings-analysis', authMiddleware, requirePremium, async (req, res) => {
+    try {
+        const { appliance_id } = req.body;
+        if (!appliance_id) {
+            return res.status(400).json({ error: 'Appliance ID is required.' });
+        }
+
+        const ratings = db.prepare(`
+      SELECT f.rating, f.comment, f.created_at, sl.provider_id, u.name as homeowner_name
+      FROM feedback f
+      JOIN service_logs sl ON f.service_log_id = sl.id
+      JOIN users u ON f.homeowner_id = u.id
+      WHERE sl.appliance_id = ?
+      ORDER BY f.created_at DESC
+    `).all(appliance_id);
+
+        const result = await aiService.analyzeRatings({ ratings });
+        res.json(result);
+    } catch (error) {
+        console.error('AI ratings analysis error:', error);
+        res.status(500).json({ error: 'Ratings analysis failed.' });
+    }
+});
+
 module.exports = router;

@@ -18,14 +18,36 @@ router.get('/', authMiddleware, (req, res) => {
       `).all();
         } else {
             schedules = db.prepare(`
-        SELECT s.*, a.name as appliance_name, a.category, p.name as property_name
+                SELECT s.*, a.name as appliance_name, a.category, p.name as property_name,
+                u.name as homeowner_name, pr.name as provider_name
         FROM schedules s
         JOIN appliances a ON s.appliance_id = a.id
         JOIN properties p ON a.property_id = p.id
+                JOIN users u ON p.user_id = u.id
+                LEFT JOIN users pr ON s.provider_id = pr.id
         WHERE p.user_id = ?
         ORDER BY s.next_due ASC
       `).all(req.user.id);
         }
+
+        // GET /api/schedules/provider - Provider assigned schedules
+        router.get('/provider', authMiddleware, (req, res) => {
+            try {
+                const schedules = db.prepare(`
+              SELECT s.*, a.name as appliance_name, a.category, p.name as property_name, u.name as homeowner_name
+              FROM schedules s
+              JOIN appliances a ON s.appliance_id = a.id
+              JOIN properties p ON a.property_id = p.id
+              JOIN users u ON p.user_id = u.id
+              WHERE s.provider_id = ?
+              ORDER BY s.next_due ASC
+            `).all(req.user.id);
+
+                res.json({ schedules });
+            } catch (error) {
+                res.status(500).json({ error: 'Failed to fetch provider schedules.' });
+            }
+        });
         res.json({ schedules });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch schedules.' });
@@ -35,7 +57,7 @@ router.get('/', authMiddleware, (req, res) => {
 // POST /api/schedules
 router.post('/', authMiddleware, isHomeowner, (req, res) => {
     try {
-        const { appliance_id, frequency_days, next_due, reminder_days_before } = req.body;
+        const { appliance_id, frequency_days, next_due, reminder_days_before, provider_id } = req.body;
 
         if (!appliance_id || !frequency_days) {
             return res.status(400).json({ error: 'Appliance and frequency are required.' });
@@ -47,15 +69,37 @@ router.post('/', authMiddleware, isHomeowner, (req, res) => {
             return res.status(409).json({ error: 'A schedule already exists for this appliance. Update it instead.' });
         }
 
+                let assignedProviderId = provider_id || null;
+                if (!assignedProviderId) {
+                        const provider = db.prepare(`
+                SELECT u.id, COUNT(sl.id) as active_jobs
+                FROM users u
+                LEFT JOIN service_logs sl ON sl.provider_id = u.id AND sl.status IN ('scheduled', 'in_progress')
+                WHERE u.role = 'service_provider'
+                GROUP BY u.id
+                ORDER BY active_jobs ASC, u.created_at ASC
+                LIMIT 1
+            `).get();
+                        assignedProviderId = provider?.id || null;
+                }
+
         const calculatedNextDue = next_due || new Date(Date.now() + frequency_days * 24 * 60 * 60 * 1000)
             .toISOString().split('T')[0];
 
         const result = db.prepare(`
-      INSERT INTO schedules (appliance_id, frequency_days, next_due, reminder_days_before)
-      VALUES (?, ?, ?, ?)
-    `).run(appliance_id, frequency_days, calculatedNextDue, reminder_days_before || 7);
+            INSERT INTO schedules (appliance_id, provider_id, frequency_days, next_due, reminder_days_before)
+            VALUES (?, ?, ?, ?, ?)
+        `).run(appliance_id, assignedProviderId, frequency_days, calculatedNextDue, reminder_days_before || 7);
 
         const schedule = db.prepare('SELECT * FROM schedules WHERE id = ?').get(result.lastInsertRowid);
+
+                if (assignedProviderId) {
+                        db.prepare(`
+                INSERT INTO notifications (user_id, title, message, type)
+                VALUES (?, ?, ?, ?)
+            `).run(assignedProviderId, 'New Job Assigned', `You have a new scheduled maintenance job for appliance #${appliance_id}.`, 'info');
+                }
+
         res.status(201).json({ schedule });
     } catch (error) {
         console.error('Create schedule error:', error);

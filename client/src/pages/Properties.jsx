@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function Properties() {
@@ -7,13 +7,13 @@ export default function Properties() {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editId, setEditId] = useState(null);
-    const [form, setForm] = useState({ name: '', address: '', type: 'House' });
+    const [form, setForm] = useState({ name: '', address: '', type: 'House', size_sqft: '' });
 
     useEffect(() => { fetchProperties(); }, []);
 
     async function fetchProperties() {
         try {
-            const { data } = await axios.get('/api/properties');
+            const { data } = await api.get('/api/properties');
             setProperties(data.properties);
         } catch (err) { toast.error('Failed to load properties'); }
         finally { setLoading(false); }
@@ -23,13 +23,13 @@ export default function Properties() {
         e.preventDefault();
         try {
             if (editId) {
-                await axios.put(`/api/properties/${editId}`, form);
+                await api.put(`/api/properties/${editId}`, form);
                 toast.success('Property updated!');
             } else {
-                await axios.post('/api/properties', form);
+                await api.post('/api/properties', form);
                 toast.success('Property added!');
             }
-            setShowForm(false); setEditId(null); setForm({ name: '', address: '', type: 'House' });
+            setShowForm(false); setEditId(null); setForm({ name: '', address: '', type: 'House', size_sqft: '' });
             fetchProperties();
         } catch (err) {
             toast.error(err.response?.data?.error || 'Operation failed');
@@ -39,7 +39,7 @@ export default function Properties() {
     async function handleDelete(id) {
         if (!confirm('Delete this property and all its appliances?')) return;
         try {
-            await axios.delete(`/api/properties/${id}`);
+            await api.delete(`/api/properties/${id}`);
             toast.success('Property deleted');
             fetchProperties();
         } catch (err) { toast.error('Failed to delete'); }
@@ -47,7 +47,7 @@ export default function Properties() {
 
     function startEdit(p) {
         setEditId(p.id);
-        setForm({ name: p.name, address: p.address, type: p.type });
+        setForm({ name: p.name, address: p.address, type: p.type, size_sqft: p.size_sqft || '' });
         setShowForm(true);
     }
 
@@ -61,7 +61,7 @@ export default function Properties() {
                     <p className="text-slate-500 mt-1">{properties.length} propert{properties.length === 1 ? 'y' : 'ies'} registered</p>
                 </div>
                 <button
-                    onClick={() => { setShowForm(!showForm); setEditId(null); setForm({ name: '', address: '', type: 'House' }); }}
+                    onClick={() => { setShowForm(!showForm); setEditId(null); setForm({ name: '', address: '', type: 'House', size_sqft: '' }); }}
                     className="bg-sky-500 hover:bg-sky-400 text-white px-4 py-2 rounded-xl text-sm font-semibold transition shadow-lg shadow-sky-500/25"
                 >
                     {showForm ? 'Cancel' : '+ Add Property'}
@@ -93,6 +93,11 @@ export default function Properties() {
                                 <option>Office</option>
                             </select>
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-navy-900 mb-1">Size (sq ft)</label>
+                            <input type="number" value={form.size_sqft} onChange={e => setForm({ ...form, size_sqft: e.target.value })}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none transition" placeholder="1200" />
+                        </div>
                     </div>
                     <button type="submit" className="mt-4 bg-sky-500 hover:bg-sky-400 text-white px-6 py-2 rounded-lg text-sm font-semibold transition">
                         {editId ? 'Update' : 'Add'} Property
@@ -116,6 +121,7 @@ export default function Properties() {
                             </div>
                             <h3 className="font-bold text-navy-900 text-lg mb-1 group-hover:text-sky-600 transition">{p.name}</h3>
                             <p className="text-sm text-slate-500 mb-3">{p.address}</p>
+                            <p className="text-sm text-slate-500 mb-3">{p.size_sqft ? `${p.size_sqft} sq ft` : 'Size not set'}</p>
                             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                                 <span className="text-sm text-slate-500">
                                     <span className="font-semibold text-navy-900">{p.appliance_count || 0}</span> appliances

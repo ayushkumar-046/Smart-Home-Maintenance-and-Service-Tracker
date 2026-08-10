@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import ServiceCard from '../components/ServiceCard';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -8,6 +8,8 @@ import toast from 'react-hot-toast';
 export default function ProviderDashboard() {
     const { user } = useAuth();
     const [services, setServices] = useState([]);
+    const [providerStats, setProviderStats] = useState(null);
+    const [assignedSchedules, setAssignedSchedules] = useState([]);
     const [feedback, setFeedback] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -15,8 +17,14 @@ export default function ProviderDashboard() {
 
     async function fetchData() {
         try {
-            const { data } = await axios.get('/api/services');
-            setServices(data.services);
+            const [servicesRes, statsRes, schedulesRes] = await Promise.all([
+                api.get('/api/services'),
+                api.get('/api/services/provider/stats'),
+                api.get('/api/schedules/provider')
+            ]);
+            setServices(servicesRes.data.services);
+            setProviderStats(statsRes.data);
+            setAssignedSchedules(schedulesRes.data.schedules);
         } catch (err) {
             toast.error('Failed to load data');
         } finally {
@@ -26,7 +34,7 @@ export default function ProviderDashboard() {
 
     async function handleStatusUpdate(id, status) {
         try {
-            await axios.put(`/api/services/${id}/status`, { status });
+            await api.put(`/api/services/${id}/status`, { status });
             toast.success(`Job ${status === 'completed' ? 'completed' : 'updated'}!`);
             fetchData();
         } catch (err) {
@@ -44,7 +52,7 @@ export default function ProviderDashboard() {
 
     const activeJobs = services.filter(s => s.status === 'scheduled' || s.status === 'in_progress');
     const completed = services.filter(s => s.status === 'completed');
-    const totalEarned = completed.reduce((sum, s) => sum + (s.cost || 0), 0);
+    const totalEarned = providerStats?.earnings ?? completed.reduce((sum, s) => sum + (s.cost || 0), 0);
 
     // Earnings by month
     const earningsByMonth = {};
@@ -66,10 +74,10 @@ export default function ProviderDashboard() {
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                    { label: 'Active Jobs', value: activeJobs.length, icon: '📋', color: 'bg-amber-50' },
-                    { label: 'Completed', value: completed.length, icon: '✅', color: 'bg-emerald-50' },
-                    { label: 'Total Jobs', value: services.length, icon: '📊', color: 'bg-indigo-50' },
-                    { label: 'Total Earned', value: `₹${totalEarned.toFixed(0)}`, icon: '💰', color: 'bg-sky-50' }
+                    { label: 'Active Jobs', value: providerStats?.activeJobs ?? activeJobs.length, icon: '📋', color: 'bg-amber-50' },
+                    { label: 'Completed', value: providerStats?.completedJobs ?? completed.length, icon: '✅', color: 'bg-emerald-50' },
+                    { label: 'Avg Rating', value: `${Number(providerStats?.avgRating || 0).toFixed(1)} / 5`, icon: '⭐', color: 'bg-indigo-50' },
+                    { label: 'Total Earned', value: `₹${Number(totalEarned).toFixed(0)}`, icon: '💰', color: 'bg-sky-50' }
                 ].map((s, i) => (
                     <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-md transition">
                         <div className={`w-10 h-10 ${s.color} rounded-lg flex items-center justify-center text-lg mb-3`}>{s.icon}</div>
@@ -77,6 +85,36 @@ export default function ProviderDashboard() {
                         <p className="text-sm text-slate-500">{s.label}</p>
                     </div>
                 ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-3">Review Summary</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-lg bg-slate-50 p-3">
+                            <p className="text-xs text-slate-500">Total Reviews</p>
+                            <p className="text-xl font-bold text-navy-900">{providerStats?.totalReviews ?? 0}</p>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3">
+                            <p className="text-xs text-slate-500">Average Rating</p>
+                            <p className="text-xl font-bold text-navy-900">{Number(providerStats?.avgRating || 0).toFixed(1)}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-3">Assigned Schedules</h3>
+                    <div className="space-y-2 max-h-40 overflow-auto pr-1">
+                        {assignedSchedules.slice(0, 5).map(schedule => (
+                            <div key={schedule.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
+                                <div>
+                                    <p className="font-medium text-navy-900">{schedule.appliance_name}</p>
+                                    <p className="text-slate-500">{schedule.homeowner_name}</p>
+                                </div>
+                                <p className="text-slate-600">Due {schedule.next_due}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Active jobs */}

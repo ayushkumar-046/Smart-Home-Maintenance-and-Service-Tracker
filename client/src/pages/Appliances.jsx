@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function Appliances() {
@@ -11,7 +11,7 @@ export default function Appliances() {
     const [filter, setFilter] = useState('');
     const [form, setForm] = useState({
         property_id: '', name: '', category: 'Appliance Maintenance',
-        brand: '', model: '', purchase_date: '', warranty_expiry: '', lifecycle_stage: 'active', notes: ''
+        brand: '', model: '', purchase_date: '', installation_date: '', condition: 'good', warranty_expiry: '', lifecycle_stage: 'active', notes: ''
     });
 
     useEffect(() => { fetchAll(); }, []);
@@ -19,7 +19,7 @@ export default function Appliances() {
     async function fetchAll() {
         try {
             const [appRes, propRes] = await Promise.all([
-                axios.get('/api/appliances'), axios.get('/api/properties')
+                api.get('/api/appliances'), api.get('/api/properties')
             ]);
             setAppliances(appRes.data.appliances);
             setProperties(propRes.data.properties);
@@ -31,27 +31,27 @@ export default function Appliances() {
         e.preventDefault();
         try {
             if (editId) {
-                await axios.put(`/api/appliances/${editId}`, form);
+                await api.put(`/api/appliances/${editId}`, form);
                 toast.success('Appliance updated!');
             } else {
-                await axios.post('/api/appliances', form);
+                await api.post('/api/appliances', form);
                 toast.success('Appliance added!');
             }
             setShowForm(false); setEditId(null);
-            setForm({ property_id: '', name: '', category: 'Appliance Maintenance', brand: '', model: '', purchase_date: '', warranty_expiry: '', lifecycle_stage: 'active', notes: '' });
+            setForm({ property_id: '', name: '', category: 'Appliance Maintenance', brand: '', model: '', purchase_date: '', installation_date: '', condition: 'good', warranty_expiry: '', lifecycle_stage: 'active', notes: '' });
             fetchAll();
         } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
     }
 
     async function handleDelete(id) {
         if (!confirm('Delete appliance and all related data?')) return;
-        try { await axios.delete(`/api/appliances/${id}`); toast.success('Deleted'); fetchAll(); }
+        try { await api.delete(`/api/appliances/${id}`); toast.success('Deleted'); fetchAll(); }
         catch { toast.error('Failed'); }
     }
 
     function startEdit(a) {
         setEditId(a.id);
-        setForm({ property_id: a.property_id || '', name: a.name, category: a.category, brand: a.brand || '', model: a.model || '', purchase_date: a.purchase_date || '', warranty_expiry: a.warranty_expiry || '', lifecycle_stage: a.lifecycle_stage, notes: a.notes || '' });
+        setForm({ property_id: a.property_id || '', name: a.name, category: a.category, brand: a.brand || '', model: a.model || '', purchase_date: a.purchase_date || '', installation_date: a.installation_date || '', condition: a.condition || 'good', warranty_expiry: a.warranty_expiry || '', lifecycle_stage: a.lifecycle_stage, notes: a.notes || '' });
         setShowForm(true);
     }
 
@@ -124,6 +124,19 @@ export default function Appliances() {
                             </select>
                         </div>
                         <div>
+                            <label className="block text-sm font-medium text-navy-900 mb-1">Installation Date</label>
+                            <input type="date" value={form.installation_date} onChange={e => setForm({ ...form, installation_date: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-navy-900 mb-1">Condition</label>
+                            <select value={form.condition} onChange={e => setForm({ ...form, condition: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none bg-white">
+                                <option value="excellent">Excellent</option>
+                                <option value="good">Good</option>
+                                <option value="fair">Fair</option>
+                                <option value="poor">Poor</option>
+                            </select>
+                        </div>
+                        <div>
                             <label className="block text-sm font-medium text-navy-900 mb-1">Purchase Date</label>
                             <input type="date" value={form.purchase_date} onChange={e => setForm({ ...form, purchase_date: e.target.value })} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:outline-none" />
                         </div>
@@ -160,6 +173,8 @@ export default function Appliances() {
                             <div className="space-y-1.5 text-sm">
                                 <div className="flex justify-between"><span className="text-slate-500">Category</span><span className="font-medium">{a.category}</span></div>
                                 {a.brand && <div className="flex justify-between"><span className="text-slate-500">Brand</span><span className="font-medium">{a.brand} {a.model}</span></div>}
+                                {a.condition && <div className="flex justify-between"><span className="text-slate-500">Condition</span><span className="font-medium capitalize">{a.condition}</span></div>}
+                                {a.installation_date && <div className="flex justify-between"><span className="text-slate-500">Installed</span><span className="font-medium">{a.installation_date}</span></div>}
                                 {a.warranty_expiry && <div className="flex justify-between"><span className="text-slate-500">Warranty</span><span className={`font-medium ${new Date(a.warranty_expiry) < new Date() ? 'text-red-500' : 'text-emerald-600'}`}>{a.warranty_expiry}</span></div>}
                                 <div className="flex justify-between"><span className="text-slate-500">Services</span><span className="font-medium">{a.service_count || 0}</span></div>
                             </div>

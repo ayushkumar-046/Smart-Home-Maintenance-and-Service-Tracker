@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell, PieChart, Pie, Legend } from 'recharts';
 
 export default function AIInsights() {
     const { user } = useAuth();
@@ -12,22 +13,32 @@ export default function AIInsights() {
     const [aiLoading, setAiLoading] = useState(false);
     const [results, setResults] = useState({});
     const [activeTab, setActiveTab] = useState('predict');
+    const [analytics, setAnalytics] = useState(null);
 
-    useEffect(() => { fetchAppliances(); }, []);
+    useEffect(() => { fetchAppliances(); fetchAnalytics(); }, []);
 
     async function fetchAppliances() {
         try {
-            const { data } = await axios.get('/api/appliances');
+            const { data } = await api.get('/api/appliances');
             setAppliances(data.appliances);
             if (data.appliances.length > 0) setSelectedAppliance(data.appliances[0].id);
         } catch { toast.error('Failed to load'); }
         finally { setLoading(false); }
     }
 
+    async function fetchAnalytics() {
+        try {
+            const { data } = await api.get('/api/ai/analytics');
+            setAnalytics(data);
+        } catch {
+            setAnalytics(null);
+        }
+    }
+
     async function runAI(endpoint, body) {
         setAiLoading(true);
         try {
-            const { data } = await axios.post(`/api/ai/${endpoint}`, body);
+            const { data } = await api.post(`/api/ai/${endpoint}`, body);
             setResults(prev => ({ ...prev, [endpoint]: data }));
         } catch (err) {
             if (err.response?.data?.upgrade_required) {
@@ -47,7 +58,7 @@ export default function AIInsights() {
                     <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-amber-200 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-6">🔒</div>
                     <h2 className="text-2xl font-bold text-navy-900 mb-3">AI Insights — Premium Feature</h2>
                     <p className="text-slate-500 mb-6">
-                        Unlock AI-powered predictive maintenance, cost forecasting, anomaly detection, vendor recommendations, and lifespan optimization.
+                        Unlock AI-powered predictive maintenance, cost forecasting, anomaly detection, vendor recommendations, ratings analysis, and lifespan optimization.
                     </p>
                     <Link to="/subscription" className="bg-gradient-to-r from-sky-500 to-blue-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition inline-block">
                         ⚡ Upgrade to Premium
@@ -62,10 +73,14 @@ export default function AIInsights() {
         { key: 'cost-forecast', label: '💰 Cost Forecast', desc: 'Estimate future costs' },
         { key: 'anomaly', label: '🚨 Anomaly Detection', desc: 'Detect unusual patterns' },
         { key: 'recommend-vendor', label: '👷 Vendor Recommendation', desc: 'Find best vendors' },
+        { key: 'ratings-analysis', label: '⭐ Ratings Analysis', desc: 'Analyze service feedback' },
         { key: 'optimize', label: '🔧 Lifespan Optimization', desc: 'Extend appliance life' },
     ];
 
     const selectedApp = appliances.find(a => a.id === Number(selectedAppliance));
+    const monthlyData = analytics?.monthlyExpenses || [];
+    const yearlyData = analytics?.yearlyExpenses || [];
+    const categoryData = analytics?.categoryBreakdown || [];
 
     return (
         <div className="space-y-6">
@@ -73,6 +88,79 @@ export default function AIInsights() {
                 <h1 className="text-2xl font-bold text-navy-900">AI Insights 🤖</h1>
                 <p className="text-slate-500 mt-1">AI-powered analysis for your home maintenance</p>
             </div>
+
+            {analytics && (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-white rounded-xl border border-slate-200 p-4">
+                            <p className="text-xs text-slate-500">Total Expense</p>
+                            <p className="text-2xl font-bold text-navy-900">₹{Number(analytics.totals?.total_cost || 0).toFixed(0)}</p>
+                        </div>
+                        <div className="bg-white rounded-xl border border-slate-200 p-4">
+                            <p className="text-xs text-slate-500">Monthly Average</p>
+                            <p className="text-2xl font-bold text-navy-900">₹{Number(analytics.totals?.average_service_cost || 0).toFixed(0)}</p>
+                        </div>
+                        <div className="bg-white rounded-xl border border-slate-200 p-4">
+                            <p className="text-xs text-slate-500">Completed Services</p>
+                            <p className="text-2xl font-bold text-navy-900">{analytics.totals?.total_services || 0}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white rounded-xl border border-slate-200 p-5">
+                            <h3 className="font-semibold text-navy-900 mb-4">Monthly Expense Breakdown</h3>
+                            <ResponsiveContainer width="100%" height={260}>
+                                <BarChart data={monthlyData.slice().reverse()}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                                    <YAxis tickFormatter={value => `₹${value}`} tick={{ fontSize: 11 }} />
+                                    <Tooltip formatter={value => `₹${Number(value).toFixed(0)}`} />
+                                    <Bar dataKey="total_cost" fill="#0ea5e9" radius={[6, 6, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="bg-white rounded-xl border border-slate-200 p-5">
+                            <h3 className="font-semibold text-navy-900 mb-4">Yearly Analytics</h3>
+                            <ResponsiveContainer width="100%" height={260}>
+                                <BarChart data={yearlyData.slice().reverse()}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                    <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                                    <YAxis tickFormatter={value => `₹${value}`} tick={{ fontSize: 11 }} />
+                                    <Tooltip formatter={value => `₹${Number(value).toFixed(0)}`} />
+                                    <Bar dataKey="total_cost" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    {categoryData.length > 0 && (
+                        <div className="bg-white rounded-xl border border-slate-200 p-5">
+                            <h3 className="font-semibold text-navy-900 mb-4">Spending by Category</h3>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+                                <ResponsiveContainer width="100%" height={260}>
+                                    <PieChart>
+                                        <Pie data={categoryData} dataKey="total_cost" nameKey="category" cx="50%" cy="50%" outerRadius={90} label>
+                                            {categoryData.map((entry, index) => (
+                                                <Cell key={entry.category} fill={['#0ea5e9', '#6366f1', '#f59e0b', '#10b981', '#ef4444'][index % 5]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={value => `₹${Number(value).toFixed(0)}`} />
+                                        <Legend />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="space-y-2">
+                                    {categoryData.map(item => (
+                                        <div key={item.category} className="flex items-center justify-between rounded-lg bg-slate-50 px-4 py-2">
+                                            <span className="text-sm font-medium text-navy-900">{item.category}</span>
+                                            <span className="text-sm text-slate-600">₹{Number(item.total_cost || 0).toFixed(0)}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Appliance selector */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -119,7 +207,7 @@ export default function AIInsights() {
                     <div className="mt-4 p-4 bg-gradient-to-br from-slate-50 to-sky-50 rounded-xl border border-sky-100 animate-fade-in">
                         {!results[activeTab].ai_powered && (
                             <div className="mb-3 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 inline-block">
-                                ⚠️ Using estimated data. Configure OpenAI API key for AI-powered results.
+                                ⚠️ Using estimated data. Configure Anthropic API key for AI-powered results.
                             </div>
                         )}
 
@@ -204,6 +292,42 @@ export default function AIInsights() {
                                         <p className="text-xs text-slate-500">Replacement</p>
                                         <p className="text-sm text-navy-900">{results[activeTab].replacement_recommendation}</p>
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'ratings-analysis' && (
+                            <div className="space-y-3">
+                                {results[activeTab].rating_trend === 'no-data' && (
+                                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
+                                        No service feedback has been recorded for this appliance yet.
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="bg-white rounded-lg p-4 border border-slate-200">
+                                        <p className="text-xs text-slate-500">Average Rating</p>
+                                        <p className="text-lg font-bold text-navy-900">
+                                            {typeof results[activeTab].average_rating === 'number' ? results[activeTab].average_rating.toFixed(1) : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="bg-white rounded-lg p-4 border border-slate-200">
+                                        <p className="text-xs text-slate-500">Trend</p>
+                                        <p className="text-lg font-bold text-sky-600 capitalize">{results[activeTab].rating_trend?.replace('-', ' ')}</p>
+                                    </div>
+                                    <div className="bg-white rounded-lg p-4 border border-slate-200">
+                                        <p className="text-xs text-slate-500">Reviews</p>
+                                        <p className="text-lg font-bold text-navy-900">{results[activeTab].total_reviews}</p>
+                                    </div>
+                                </div>
+                                <div className="bg-white rounded-lg p-4 border border-slate-200">
+                                    <p className="text-xs text-slate-500 mb-2">Recurring Themes</p>
+                                    <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
+                                        {(results[activeTab].recurring_themes || []).map((theme, index) => <li key={index}>{theme}</li>)}
+                                    </ul>
+                                </div>
+                                <div className="bg-white rounded-lg p-4 border border-slate-200">
+                                    <p className="text-xs text-slate-500 mb-1">Recommendation</p>
+                                    <p className="text-sm text-navy-900">{results[activeTab].recommendation}</p>
                                 </div>
                             </div>
                         )}

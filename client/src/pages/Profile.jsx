@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import toast from 'react-hot-toast';
 
 export default function Profile() {
-    const { user, checkAuth } = useAuth();
+    const { user } = useAuth();
     const [editing, setEditing] = useState(false);
     const [form, setForm] = useState({ name: user?.name || '', email: user?.email || '' });
 
@@ -37,6 +36,7 @@ export default function Profile() {
                         <div>
                             <h2 className="text-xl font-bold text-navy-900">{user?.name}</h2>
                             <p className="text-slate-500">{user?.email}</p>
+                                <p className="text-xs text-slate-400 mt-1 font-mono">{user?.public_id || `USR-${user?.id || ''}`}</p>
                             <div className="flex items-center gap-2 mt-2">
                                 <span className="px-2 py-0.5 bg-sky-100 text-sky-700 rounded-full text-xs font-semibold capitalize">
                                     {user?.role?.replace('_', ' ')}

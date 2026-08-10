@@ -1,25 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 
-// Configure multer
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '..', 'uploads');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
@@ -36,12 +21,25 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB
 });
 
+function decodeBuffer(fileData) {
+    if (!fileData) {
+        return null;
+    }
+
+    if (fileData.__type === 'buffer') {
+        return Buffer.from(fileData.data, 'base64');
+    }
+
+    return Buffer.from(fileData.data || []);
+}
+
 // GET /api/documents
 router.get('/', authMiddleware, (req, res) => {
     try {
         const { appliance_id, service_log_id } = req.query;
         let query = `
-      SELECT d.*, a.name as appliance_name
+            SELECT d.id, d.appliance_id, d.service_log_id, d.type, d.filename, d.mime_type, d.uploaded_at, d.user_id,
+                         a.name as appliance_name
       FROM documents d
       LEFT JOIN appliances a ON d.appliance_id = a.id
       WHERE d.user_id = ?
@@ -50,7 +48,8 @@ router.get('/', authMiddleware, (req, res) => {
 
         if (req.user.role === 'admin') {
             query = `
-        SELECT d.*, a.name as appliance_name, u.name as uploader_name
+        SELECT d.id, d.appliance_id, d.service_log_id, d.type, d.filename, d.mime_type, d.uploaded_at, d.user_id,
+               a.name as appliance_name, u.name as uploader_name
         FROM documents d
         LEFT JOIN appliances a ON d.appliance_id = a.id
         LEFT JOIN users u ON d.user_id = u.id
@@ -90,13 +89,14 @@ router.post('/upload', authMiddleware, (req, res) => {
         try {
             const { appliance_id, service_log_id, type } = req.body;
             const docType = type || 'general';
+            const fileBuffer = req.file.buffer;
 
             const result = db.prepare(`
-        INSERT INTO documents (appliance_id, service_log_id, type, filename, filepath, user_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO documents (appliance_id, service_log_id, type, filename, mime_type, file_data, user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(
                 appliance_id || null, service_log_id || null, docType,
-                req.file.originalname, req.file.filename, req.user.id
+                req.file.originalname, req.file.mimetype, fileBuffer, req.user.id
             );
 
             const document = db.prepare('SELECT * FROM documents WHERE id = ?').get(result.lastInsertRowid);
@@ -120,12 +120,14 @@ router.get('/download/:id', authMiddleware, (req, res) => {
             return res.status(403).json({ error: 'Access denied.' });
         }
 
-        const filePath = path.join(__dirname, '..', 'uploads', document.filepath);
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'File not found on disk.' });
+        const fileBuffer = decodeBuffer(document.file_data);
+        if (!fileBuffer) {
+            return res.status(404).json({ error: 'File not found.' });
         }
 
-        res.download(filePath, document.filename);
+        res.setHeader('Content-Type', document.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${document.filename}"`);
+        res.send(fileBuffer);
     } catch (error) {
         res.status(500).json({ error: 'Failed to download document.' });
     }
@@ -141,12 +143,6 @@ router.delete('/:id', authMiddleware, (req, res) => {
 
         if (document.user_id !== req.user.id && req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Access denied.' });
-        }
-
-        // Delete file from disk
-        const filePath = path.join(__dirname, '..', 'uploads', document.filepath);
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
         }
 
         db.prepare('DELETE FROM documents WHERE id = ?').run(req.params.id);

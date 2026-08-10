@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function Documents() {
@@ -15,8 +15,8 @@ export default function Documents() {
     async function fetchAll() {
         try {
             const [docRes, appRes] = await Promise.all([
-                axios.get('/api/documents'),
-                axios.get('/api/appliances').catch(() => ({ data: { appliances: [] } }))
+                api.get('/api/documents'),
+                api.get('/api/appliances').catch(() => ({ data: { appliances: [] } }))
             ]);
             setDocuments(docRes.data.documents);
             setAppliances(appRes.data.appliances);
@@ -34,7 +34,7 @@ export default function Documents() {
             formData.append('type', uploadForm.type);
             if (uploadForm.appliance_id) formData.append('appliance_id', uploadForm.appliance_id);
 
-            await axios.post('/api/documents/upload', formData, {
+            await api.post('/api/documents/upload', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             toast.success('Document uploaded!');
@@ -47,7 +47,7 @@ export default function Documents() {
 
     async function handleDownload(id, filename) {
         try {
-            const response = await axios.get(`/api/documents/download/${id}`, { responseType: 'blob' });
+            const response = await api.get(`/api/documents/download/${id}`, { responseType: 'blob' });
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
@@ -60,7 +60,7 @@ export default function Documents() {
 
     async function handleDelete(id) {
         if (!confirm('Delete this document?')) return;
-        try { await axios.delete(`/api/documents/${id}`); toast.success('Deleted'); fetchAll(); }
+        try { await api.delete(`/api/documents/${id}`); toast.success('Deleted'); fetchAll(); }
         catch { toast.error('Failed'); }
     }
 

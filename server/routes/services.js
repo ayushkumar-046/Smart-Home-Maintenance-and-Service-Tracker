@@ -82,7 +82,7 @@ router.get('/stats', authMiddleware, (req, res) => {
 
         // By month (last 12 months)
         let byMonthQuery = `
-      SELECT strftime('%Y-%m', sl.completed_date) as month, SUM(sl.cost) as total_cost, COUNT(*) as count
+            SELECT TO_CHAR(sl.completed_date::date, 'YYYY-MM') as month, SUM(sl.cost) as total_cost, COUNT(*) as count
       FROM service_logs sl
       JOIN appliances a ON sl.appliance_id = a.id
       JOIN properties p ON a.property_id = p.id
@@ -109,6 +109,48 @@ router.get('/stats', authMiddleware, (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch stats.' });
     }
+});
+
+// GET /api/services/provider/stats - Provider analytics
+router.get('/provider/stats', authMiddleware, (req, res) => {
+        try {
+                const providerId = req.user.id;
+
+                const counts = db.prepare(`
+            SELECT
+                COUNT(*) FILTER (WHERE provider_id = ?) as assigned_jobs,
+                COUNT(*) FILTER (WHERE provider_id = ? AND status = 'completed') as completed_jobs,
+                COUNT(*) FILTER (WHERE provider_id = ? AND status IN ('scheduled', 'in_progress')) as active_jobs,
+                COALESCE(SUM(CASE WHEN provider_id = ? AND status = 'completed' THEN cost ELSE 0 END), 0) as earnings
+            FROM service_logs
+        `).get(providerId, providerId, providerId, providerId);
+
+                const rating = db.prepare(`
+            SELECT COALESCE(AVG(f.rating), 0) as avg_rating, COUNT(f.id) as total_reviews
+            FROM feedback f
+            JOIN service_logs sl ON f.service_log_id = sl.id
+            WHERE sl.provider_id = ?
+        `).get(providerId);
+
+                const monthlyEarnings = db.prepare(`
+            SELECT TO_CHAR(sl.completed_date::date, 'YYYY-MM') as month, SUM(sl.cost) as total
+            FROM service_logs sl
+            WHERE sl.provider_id = ? AND sl.status = 'completed' AND sl.completed_date IS NOT NULL
+            GROUP BY month ORDER BY month DESC LIMIT 12
+        `).all(providerId);
+
+                res.json({
+                        assignedJobs: Number(counts.assigned_jobs || 0),
+                        completedJobs: Number(counts.completed_jobs || 0),
+                        activeJobs: Number(counts.active_jobs || 0),
+                        earnings: Number(counts.earnings || 0),
+                        avgRating: Number(rating.avg_rating || 0),
+                        totalReviews: Number(rating.total_reviews || 0),
+                        monthlyEarnings
+                });
+        } catch (error) {
+                res.status(500).json({ error: 'Failed to fetch provider stats.' });
+        }
 });
 
 // GET /api/services/:id
@@ -163,10 +205,24 @@ router.post('/', authMiddleware, (req, res) => {
             }
         }
 
-        const result = db.prepare(`
+                let assignedProviderId = provider_id || null;
+                if (!assignedProviderId) {
+                        const provider = db.prepare(`
+                SELECT u.id, COUNT(sl.id) as active_jobs
+                FROM users u
+                LEFT JOIN service_logs sl ON sl.provider_id = u.id AND sl.status IN ('scheduled', 'in_progress')
+                WHERE u.role = 'service_provider'
+                GROUP BY u.id
+                ORDER BY active_jobs ASC, u.created_at ASC
+                LIMIT 1
+            `).get();
+                        assignedProviderId = provider?.id || null;
+                }
+
+                const result = db.prepare(`
       INSERT INTO service_logs (appliance_id, vendor_id, user_id, provider_id, status, scheduled_date, cost, notes)
       VALUES (?, ?, ?, ?, 'scheduled', ?, ?, ?)
-    `).run(appliance_id, vendor_id || null, req.user.id, provider_id || null, scheduled_date, cost || 0, notes || null);
+        `).run(appliance_id, vendor_id || null, req.user.id, assignedProviderId, scheduled_date, cost || 0, notes || null);
 
         // Create notification
         db.prepare(`
@@ -175,11 +231,11 @@ router.post('/', authMiddleware, (req, res) => {
     `).run(req.user.id, 'Service Scheduled', `A new service has been scheduled for ${scheduled_date}.`, 'info');
 
         // Notify provider if assigned
-        if (provider_id) {
+                if (assignedProviderId) {
             db.prepare(`
         INSERT INTO notifications (user_id, title, message, type)
         VALUES (?, ?, ?, ?)
-      `).run(provider_id, 'New Job Assigned', `You have been assigned a new service job for ${scheduled_date}.`, 'info');
+            `).run(assignedProviderId, 'New Job Assigned', `You have been assigned a new service job for ${scheduled_date}.`, 'info');
         }
 
         const service = db.prepare(`

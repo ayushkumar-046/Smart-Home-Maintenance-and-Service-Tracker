@@ -14,11 +14,11 @@ The app supports **three user roles** (Homeowner, Service Provider, Admin), each
 |-------|-----------|
 | **Frontend** | React 18, Vite, Tailwind CSS, React Router v6 |
 | **Backend** | Node.js 20, Express.js |
-| **Database** | SQLite (via better-sqlite3) — zero external DB setup |
+| **Database** | PostgreSQL via `DATABASE_URL` |
 | **Authentication** | JWT (jsonwebtoken) + bcryptjs |
 | **Payments** | Stripe (test mode integration) |
-| **File Handling** | Multer (local uploads) |
-| **AI Features** | OpenAI GPT-4o API with intelligent fallback responses |
+| **File Handling** | Multer (buffer uploads stored in PostgreSQL) |
+| **AI Features** | Anthropic Claude Opus 4.6 API with intelligent fallback responses |
 | **Email** | Nodemailer with Gmail SMTP |
 | **Charts** | Recharts |
 | **PDF Generation** | PDFKit |
@@ -81,14 +81,20 @@ cd ..
 
 ```bash
 # Create environment file
-cp server/.env.example server/.env
+cp .env.example .env
 ```
 
-Edit `server/.env` and configure your keys:
+Edit `.env` and configure your keys:
 - `JWT_SECRET` — Required for authentication
-- `OPENAI_API_KEY` — Optional (app works with smart fallback responses without it)
+- `ANTHROPIC_API_KEY` — Optional (app works with smart fallback responses without it)
 - `STRIPE_SECRET_KEY` — Optional (for payment processing)
-- `SMTP_USER` / `SMTP_PASS` — Optional (for email notifications)
+- `EMAIL_USER` / `EMAIL_PASS` — Optional (for email notifications)
+
+For deployment, also set:
+- `CLIENT_URL` — Your deployed frontend URL
+- `VITE_API_BASE_URL` — Your deployed backend API URL
+- `DATABASE_URL` — Hosted database connection string if you switch to a managed SQL database
+- `NODE_ENV=production`
 
 ### Running the Application
 
@@ -98,13 +104,39 @@ npm run dev
 
 This starts both the backend (http://localhost:5000) and frontend (http://localhost:5173) concurrently.
 
-### Test Credentials
+### Deployment Notes
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@smarthome.com | Admin@123 |
-| Homeowner | homeowner@smarthome.com | Home@123 |
-| Service Provider | provider@smarthome.com | Provider@123 |
+- Build the client with `npm run build` from the repo root.
+- Deploy the backend with the same `server/index.js` entrypoint.
+- Set `CLIENT_URL` and `VITE_API_BASE_URL` to your live domains so cookies and API calls work cross-origin.
+- Set `DATABASE_URL` to your hosted PostgreSQL instance. The app bootstraps its schema and seeds automatically when the users table is empty.
+- Documents, receipts, and invoices are stored in PostgreSQL as file blobs, so they persist across restarts and redeploys.
+
+### Default Credentials
+
+| Role | User ID | Email | Password |
+|------|---------|-------|----------|
+| Admin | ADM-0001 | admin@smarthome.com | Admin@123 |
+| Homeowner | HOM-0001 | homeowner1@smarthome.com | Homeowner1@123 |
+| Homeowner | HOM-0002 | homeowner2@smarthome.com | Homeowner2@123 |
+| Homeowner | HOM-0003 | homeowner3@smarthome.com | Homeowner3@123 |
+| Homeowner | HOM-0004 | homeowner4@smarthome.com | Homeowner4@123 |
+| Homeowner | HOM-0005 | homeowner5@smarthome.com | Homeowner5@123 |
+| Homeowner | HOM-0006 | homeowner6@smarthome.com | Homeowner6@123 |
+| Homeowner | HOM-0007 | homeowner7@smarthome.com | Homeowner7@123 |
+| Homeowner | HOM-0008 | homeowner8@smarthome.com | Homeowner8@123 |
+| Homeowner | HOM-0009 | homeowner9@smarthome.com | Homeowner9@123 |
+| Homeowner | HOM-0010 | homeowner10@smarthome.com | Homeowner10@123 |
+| Service Provider | PRV-0001 | provider1@smarthome.com | Provider1@123 |
+| Service Provider | PRV-0002 | provider2@smarthome.com | Provider2@123 |
+| Service Provider | PRV-0003 | provider3@smarthome.com | Provider3@123 |
+| Service Provider | PRV-0004 | provider4@smarthome.com | Provider4@123 |
+| Service Provider | PRV-0005 | provider5@smarthome.com | Provider5@123 |
+| Service Provider | PRV-0006 | provider6@smarthome.com | Provider6@123 |
+| Service Provider | PRV-0007 | provider7@smarthome.com | Provider7@123 |
+| Service Provider | PRV-0008 | provider8@smarthome.com | Provider8@123 |
+| Service Provider | PRV-0009 | provider9@smarthome.com | Provider9@123 |
+| Service Provider | PRV-0010 | provider10@smarthome.com | Provider10@123 |
 
 ## 📁 Project Structure
 
@@ -119,7 +151,6 @@ Smart-Home-Maintenance-and-Service-Tracker/
 │   │   │   ├── ServiceCard.jsx
 │   │   │   ├── Sidebar.jsx
 │   │   │   ├── StatusBadge.jsx
-│   │   │   ├── VendorCard.jsx
 │   │   │   └── WarrantyAlert.jsx
 │   │   ├── context/            # React Context providers
 │   │   │   └── AuthContext.jsx
@@ -169,7 +200,9 @@ Smart-Home-Maintenance-and-Service-Tracker/
 │   │   ├── pdfService.js       # PDF report generation
 │   │   └── stripeService.js    # Stripe payment processing
 │   ├── uploads/                # User uploaded files
-│   ├── db.js                   # Database schema & seed data
+│   ├── config/
+│   │   └── database.js         # Database schema
+│   ├── db.js                   # Database entrypoint
 │   ├── index.js                # Server entry point
 │   └── .env.example            # Environment variable template
 ├── .gitignore
@@ -187,7 +220,20 @@ The AI module provides five intelligent capabilities:
 4. **Vendor Recommendations** — Scores and ranks vendors based on rating (50%), experience (30%), and category expertise (20%)
 5. **Lifespan Optimization** — Provides age-specific maintenance tips to extend appliance life, with health scores and efficiency estimates
 
-> The AI features work with OpenAI GPT-4o when an API key is configured. Without it, the app uses intelligent category-aware fallback responses that still provide useful insights.
+> The AI features work with Anthropic Claude Opus 4.6 when an API key is configured. Without it, the app uses intelligent category-aware fallback responses that still provide useful insights.
+
+## 🔐 Production Data Model
+
+The database seeds a realistic production dataset on first boot:
+
+- 1 admin account
+- 10 homeowner accounts
+- 10 service provider accounts
+- Multiple properties per homeowner profile
+- Appliances with installation dates, condition, and lifecycle stage
+- Schedules, completed service logs, notifications, feedback, and database-backed documents
+
+All user-facing IDs are stored as public IDs in the database and surfaced in the admin and profile views.
 
 ## 🔮 Future Enhancements
 

@@ -1,14 +1,23 @@
 # Dependencies
-node_modules/
+/node_modules/
+/client/node_modules/
+/server/node_modules/
 
 # Environment variables
 .env
 server/.env
+client/.env
 
 # Database
 server/database.sqlite
 server/database.sqlite-shm
 server/database.sqlite-wal
+
+# Build output
+/dist/
+/build/
+client/dist/
+server/dist/
 
 # Uploads (user-generated files)
 server/uploads/*
@@ -21,9 +30,6 @@ server/uploads/*
 # OS files
 .DS_Store
 Thumbs.db
-
-# Build output
-client/dist/
 
 # Logs
 *.log

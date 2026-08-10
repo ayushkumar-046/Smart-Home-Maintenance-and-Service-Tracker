@@ -6,7 +6,6 @@ function getTransporter() {
     if (transporter) return transporter;
 
     if (!process.env.EMAIL_USER || process.env.EMAIL_USER === 'your_gmail@gmail.com') {
-        console.log('⚠️  Email service not configured. Set EMAIL_USER and EMAIL_PASS in .env');
         return null;
     }
 
@@ -24,7 +23,6 @@ function getTransporter() {
 async function sendReminderEmail(to, subject, body) {
     const transport = getTransporter();
     if (!transport) {
-        console.log(`📧 [Email Mock] To: ${to} | Subject: ${subject}`);
         return { success: true, mock: true };
     }
 

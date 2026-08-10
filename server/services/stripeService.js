@@ -1,8 +1,8 @@
 const stripe = require('stripe');
 const db = require('../db');
 const { generateReceipt } = require('./pdfService');
-const fs = require('fs');
-const path = require('path');
+
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
 function getStripeClient() {
     if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_your_stripe_key') {
@@ -18,16 +18,12 @@ async function createCheckoutSession(userId, userEmail) {
         const mockSessionId = `mock_session_${Date.now()}`;
         db.prepare(`
       INSERT INTO subscriptions (user_id, plan, stripe_session_id, status, start_date, end_date)
-      VALUES (?, 'premium', ?, 'active', date('now'), date('now', '+30 days'))
+            VALUES (?, 'premium', ?, 'active', CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days')
     `).run(userId, mockSessionId);
 
         db.prepare("UPDATE users SET plan = 'premium' WHERE id = ?").run(userId);
 
-        return {
-            url: `${process.env.CLIENT_URL || 'http://localhost:5173'}/subscription?success=true&mock=true`,
-            sessionId: mockSessionId,
-            mock: true
-        };
+        return { url: `${clientUrl}/subscription?success=true&mock=true`, sessionId: mockSessionId, mock: true };
     }
 
     const session = await stripeClient.checkout.sessions.create({
@@ -38,8 +34,8 @@ async function createCheckoutSession(userId, userEmail) {
             price: process.env.STRIPE_PREMIUM_PRICE_ID,
             quantity: 1
         }],
-        success_url: `${process.env.CLIENT_URL}/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.CLIENT_URL}/subscription?cancelled=true`,
+        success_url: `${clientUrl}/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${clientUrl}/subscription?cancelled=true`,
         metadata: { userId: String(userId) }
     });
 
@@ -70,7 +66,7 @@ async function handleWebhook(payload, sig) {
 
             db.prepare(`
         INSERT INTO subscriptions (user_id, plan, stripe_session_id, status, start_date, end_date)
-        VALUES (?, 'premium', ?, 'active', date('now'), date('now', '+30 days'))
+                VALUES (?, 'premium', ?, 'active', CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days')
       `).run(userId, session.id);
 
             db.prepare("UPDATE users SET plan = 'premium' WHERE id = ?").run(userId);
@@ -94,12 +90,10 @@ async function handleWebhook(payload, sig) {
                         amount: '₹499'
                     });
 
-                    const receiptsDir = path.join(__dirname, '..', 'uploads', 'receipts');
-                    if (!fs.existsSync(receiptsDir)) {
-                        fs.mkdirSync(receiptsDir, { recursive: true });
-                    }
-                    const filename = `receipt_${userId}_${Date.now()}.pdf`;
-                    fs.writeFileSync(path.join(receiptsDir, filename), receiptBuffer);
+                    db.prepare(`
+                        INSERT INTO documents (type, filename, mime_type, file_data, user_id)
+                        VALUES (?, ?, ?, ?, ?)
+                    `).run('invoice', `receipt_${userId}_${Date.now()}.pdf`, 'application/pdf', receiptBuffer, userId);
                 } catch (err) {
                     console.error('Receipt generation failed:', err.message);
                 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ServiceCard from '../components/ServiceCard';
@@ -12,6 +12,7 @@ export default function HomeownerDashboard() {
     const [stats, setStats] = useState(null);
     const [services, setServices] = useState([]);
     const [appliances, setAppliances] = useState([]);
+    const [properties, setProperties] = useState([]);
     const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -19,16 +20,18 @@ export default function HomeownerDashboard() {
 
     async function fetchAll() {
         try {
-            const [statsRes, servicesRes, appliancesRes, schedulesRes] = await Promise.all([
-                axios.get('/api/services/stats'),
-                axios.get('/api/services'),
-                axios.get('/api/appliances'),
-                axios.get('/api/schedules')
+            const [statsRes, servicesRes, appliancesRes, schedulesRes, propertiesRes] = await Promise.all([
+                api.get('/api/services/stats'),
+                api.get('/api/services'),
+                api.get('/api/appliances'),
+                api.get('/api/schedules'),
+                api.get('/api/properties')
             ]);
             setStats(statsRes.data);
             setServices(servicesRes.data.services);
             setAppliances(appliancesRes.data.appliances);
             setSchedules(schedulesRes.data.schedules);
+            setProperties(propertiesRes.data.properties);
         } catch (err) {
             toast.error('Failed to load dashboard data');
         } finally {
@@ -38,7 +41,7 @@ export default function HomeownerDashboard() {
 
     async function handleStatusUpdate(id, status) {
         try {
-            await axios.put(`/api/services/${id}/status`, { status });
+            await api.put(`/api/services/${id}/status`, { status });
             toast.success(`Service ${status === 'completed' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'started'}!`);
             fetchAll();
         } catch (err) {
@@ -74,7 +77,7 @@ export default function HomeownerDashboard() {
             {/* Stats cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                    { label: 'Properties', value: new Set(appliances.map(a => a.property_name)).size, icon: '🏠', color: 'bg-sky-50 text-sky-600' },
+                    { label: 'Properties', value: properties.length, icon: '🏠', color: 'bg-sky-50 text-sky-600' },
                     { label: 'Appliances', value: appliances.length, icon: '⚙️', color: 'bg-indigo-50 text-indigo-600' },
                     { label: 'Active Services', value: upcomingServices.length, icon: '📋', color: 'bg-amber-50 text-amber-600' },
                     { label: 'Total Spent', value: `₹${(stats?.totals?.total_cost || 0).toFixed(0)}`, icon: '💰', color: 'bg-emerald-50 text-emerald-600' }
@@ -91,6 +94,45 @@ export default function HomeownerDashboard() {
 
             {/* Warranty alerts */}
             <WarrantyAlert appliances={appliances} />
+
+            {properties.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-4">Your Properties</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {properties.map(property => (
+                            <div key={property.id} className="rounded-xl border border-slate-200 p-4 bg-slate-50">
+                                <p className="font-semibold text-navy-900">{property.name}</p>
+                                <p className="text-sm text-slate-500 mt-1">{property.address}</p>
+                                <div className="mt-3 flex items-center justify-between text-sm">
+                                    <span className="text-slate-500">{property.type}</span>
+                                    <span className="font-semibold text-navy-900">{property.size_sqft || 0} sq ft</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {appliances.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-4">Your Appliances</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {appliances.map(appliance => {
+                            const schedule = schedules.find(item => item.appliance_id === appliance.id);
+                            return (
+                                <div key={appliance.id} className="rounded-xl border border-slate-200 p-4 bg-slate-50">
+                                    <p className="font-semibold text-navy-900">{appliance.name}</p>
+                                    <p className="text-sm text-slate-500 mt-1">{appliance.property_name} · {appliance.category}</p>
+                                    <div className="mt-3 flex items-center justify-between text-sm">
+                                        <span className="text-slate-500 capitalize">Condition: {appliance.condition || 'good'}</span>
+                                        <span className="font-semibold text-navy-900">{schedule?.next_due || 'No schedule'}</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Upcoming services */}
             <div>

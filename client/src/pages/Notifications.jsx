@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function Notifications() {
@@ -11,7 +11,7 @@ export default function Notifications() {
 
     async function fetchNotifications() {
         try {
-            const { data } = await axios.get('/api/notifications');
+            const { data } = await api.get('/api/notifications');
             setNotifications(data.notifications);
             setUnreadCount(data.unreadCount);
         } catch { toast.error('Failed to load'); }
@@ -20,14 +20,14 @@ export default function Notifications() {
 
     async function markRead(id) {
         try {
-            await axios.put(`/api/notifications/${id}/read`);
+            await api.put(`/api/notifications/${id}/read`);
             fetchNotifications();
         } catch { }
     }
 
     async function markAllRead() {
         try {
-            await axios.put('/api/notifications/read-all');
+            await api.put('/api/notifications/read-all');
             toast.success('All marked as read');
             fetchNotifications();
         } catch { toast.error('Failed'); }
@@ -35,7 +35,7 @@ export default function Notifications() {
 
     async function deleteNotification(id) {
         try {
-            await axios.delete(`/api/notifications/${id}`);
+            await api.delete(`/api/notifications/${id}`);
             fetchNotifications();
         } catch { toast.error('Failed'); }
     }

@@ -1,10 +1,22 @@
-const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk');
 
 function getClient() {
-    if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'your_openai_key_here') {
+    if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_anthropic_key_here') {
         return null;
     }
-    return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+}
+
+async function callClaude(client, prompt) {
+    const response = await client.messages.create({
+        model: 'claude-opus-4-0-20250514',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt + '\n\nRespond ONLY with valid JSON. No extra text.' }]
+    });
+    const text = response.content[0].text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON found in response');
+    return JSON.parse(jsonMatch[0]);
 }
 
 // Smart category-based maintenance intervals (in days)
@@ -72,14 +84,7 @@ Respond in JSON format with:
   "maintenance_priority": "HIGH/MEDIUM/LOW"
 }`;
 
-    const response = await client.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 600
-    });
-
-    const result = JSON.parse(response.choices[0].message.content);
+    const result = await callClaude(client, prompt);
     result.ai_powered = true;
     return result;
 }
@@ -146,14 +151,7 @@ Respond in JSON format with:
   "annual_budget": number
 }`;
 
-    const response = await client.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 600
-    });
-
-    const result = JSON.parse(response.choices[0].message.content);
+    const result = await callClaude(client, prompt);
     result.ai_powered = true;
     return result;
 }
@@ -225,14 +223,7 @@ Respond in JSON format with:
   "severity": "critical/warning/normal"
 }`;
 
-    const response = await client.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 600
-    });
-
-    const result = JSON.parse(response.choices[0].message.content);
+    const result = await callClaude(client, prompt);
     result.ai_powered = true;
     return result;
 }
@@ -289,14 +280,7 @@ Respond in JSON format with:
   "selection_criteria": {"weights": {"rating": "50%", "experience": "30%", "category_match": "20%"}, "total_vendors_evaluated": number}
 }`;
 
-    const response = await client.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 600
-    });
-
-    const result = JSON.parse(response.choices[0].message.content);
+    const result = await callClaude(client, prompt);
     result.ai_powered = true;
     return result;
 }
@@ -396,14 +380,58 @@ Respond in JSON format with:
   "efficiency_estimate": "XX%"
 }`;
 
-    const response = await client.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        max_tokens: 600
-    });
+    const result = await callClaude(client, prompt);
+    result.ai_powered = true;
+    return result;
+}
 
-    const result = JSON.parse(response.choices[0].message.content);
+async function analyzeRatings(data) {
+    const client = getClient();
+    const ratings = data.ratings || [];
+    if (ratings.length === 0) {
+        return {
+            average_rating: null,
+            rating_trend: 'no-data',
+            total_reviews: 0,
+            recurring_themes: [],
+            recommendation: 'No feedback is available for this appliance yet. Collect a few service reviews before running ratings analysis.',
+            ai_powered: false
+        };
+    }
+
+    const averageRating = ratings.length > 0 ? ratings.reduce((sum, item) => sum + item.rating, 0) / ratings.length : 0;
+
+    if (!client) {
+        const trend = averageRating >= 4.5 ? 'excellent' : averageRating >= 4 ? 'positive' : averageRating >= 3 ? 'mixed' : 'concerning';
+        const recurringThemes = [];
+        if (ratings.some(item => /delay|late/i.test(item.comment || ''))) recurringThemes.push('Timeliness can be improved');
+        if (ratings.some(item => /cost|price/i.test(item.comment || ''))) recurringThemes.push('Pricing sensitivity is a factor');
+        if (ratings.some(item => /professional|excellent|great/i.test(item.comment || ''))) recurringThemes.push('Professionalism is appreciated');
+
+        return {
+            average_rating: Number(averageRating.toFixed(1)),
+            rating_trend: trend,
+            total_reviews: ratings.length,
+            recurring_themes: recurringThemes.length > 0 ? recurringThemes : ['Feedback volume is too low for strong pattern detection'],
+            recommendation: averageRating >= 4 ? 'Maintain current service quality and respond quickly to every review.' : 'Improve response times, post-service communication, and issue resolution follow-up.',
+            ai_powered: false
+        };
+    }
+
+    const prompt = `You are a service quality analyst. Analyze the following homeowner service ratings and summarize the review trends.
+
+Ratings Data: ${JSON.stringify(ratings)}
+
+Respond in JSON format with:
+{
+  "average_rating": number,
+  "rating_trend": "excellent/positive/mixed/concerning",
+  "total_reviews": number,
+  "recurring_themes": ["theme1", "theme2"],
+  "recommendation": "actionable recommendation"
+}`;
+
+    const result = await callClaude(client, prompt);
     result.ai_powered = true;
     return result;
 }
@@ -413,5 +441,6 @@ module.exports = {
     costForecast,
     detectAnomalies,
     recommendVendor,
-    optimizeLifespan
+    optimizeLifespan,
+    analyzeRatings
 };

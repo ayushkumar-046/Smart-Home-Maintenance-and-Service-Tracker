@@ -5,8 +5,23 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
 
+function generatePublicId(prefix) {
+    const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
+    return `${prefix}-${suffix}`;
+}
+
+function getCookieOptions() {
+    const secure = process.env.NODE_ENV === 'production';
+    return {
+        httpOnly: true,
+        secure,
+        sameSite: secure ? 'none' : 'lax',
+        maxAge: 30 * 60 * 1000
+    };
+}
+
 // POST /api/auth/register
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
 
@@ -18,8 +33,8 @@ router.post('/register', (req, res) => {
         const userRole = validRoles.includes(role) ? role : 'homeowner';
 
         // Check if user already exists
-        const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-        if (existing) {
+        const existingResult = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+        if (existingResult.rowCount > 0) {
             return res.status(409).json({ error: 'An account with this email already exists.' });
         }
 
@@ -29,17 +44,20 @@ router.post('/register', (req, res) => {
         }
 
         const password_hash = bcrypt.hashSync(password, 12);
-        const result = db.prepare(
-            'INSERT INTO users (name, email, password_hash, role, plan) VALUES (?, ?, ?, ?, ?)'
-        ).run(name, email, password_hash, userRole, 'free');
+        const publicId = generatePublicId(userRole === 'admin' ? 'ADM' : userRole === 'service_provider' ? 'PRV' : 'HOM');
+        const result = await db.query(
+            'INSERT INTO users (public_id, name, email, password_hash, role, plan) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+            [publicId, name, email, password_hash, userRole, 'free']
+        );
 
-        const user = db.prepare('SELECT id, name, email, role, plan, created_at FROM users WHERE id = ?')
-            .get(result.lastInsertRowid);
+        const userResult = await db.query('SELECT id, public_id, name, email, role, plan, created_at FROM users WHERE id = $1', [result.rows[0].id]);
+        const user = userResult.rows[0];
 
         // Create welcome notification
-        db.prepare(
-            'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)'
-        ).run(user.id, 'Welcome!', `Welcome to Smart Home Tracker, ${name}! Get started by adding your first property.`, 'info');
+        await db.query(
+            'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)',
+            [user.id, 'Welcome!', `Welcome to Smart Home Tracker, ${name}! Get started by adding your first property.`, 'info']
+        );
 
         // Generate JWT
         const token = jwt.sign(
@@ -48,12 +66,7 @@ router.post('/register', (req, res) => {
             { expiresIn: '30m' }
         );
 
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: false,
-            sameSite: 'lax',
-            maxAge: 30 * 60 * 1000 // 30 minutes
-        });
+        res.cookie('token', token, getCookieOptions());
 
         res.status(201).json({ user });
     } catch (error) {
@@ -63,7 +76,7 @@ router.post('/register', (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
@@ -71,10 +84,11 @@ router.post('/login', (req, res) => {
             return res.status(400).json({ error: 'Email and password are required.' });
         }
 
-        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-        if (!user) {
+        const userResult = await db.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (userResult.rowCount === 0) {
             return res.status(401).json({ error: 'Invalid email or password.' });
         }
+        const user = userResult.rows[0];
 
         const validPassword = bcrypt.compareSync(password, user.password_hash);
         if (!validPassword) {
@@ -87,12 +101,7 @@ router.post('/login', (req, res) => {
             { expiresIn: '30m' }
         );
 
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: false,
-            sameSite: 'lax',
-            maxAge: 30 * 60 * 1000
-        });
+        res.cookie('token', token, getCookieOptions());
 
         const { password_hash, ...userData } = user;
         res.json({ user: userData });
@@ -109,27 +118,29 @@ router.post('/logout', (req, res) => {
 });
 
 // GET /api/auth/me - Get current user
-router.get('/me', authMiddleware, (req, res) => {
+router.get('/me', authMiddleware, async (req, res) => {
     try {
-        const user = db.prepare('SELECT id, name, email, role, plan, created_at FROM users WHERE id = ?')
-            .get(req.user.id);
-        if (!user) {
+        const userResult = await db.query('SELECT id, public_id, name, email, role, plan, created_at FROM users WHERE id = $1', [req.user.id]);
+        if (userResult.rowCount === 0) {
             res.clearCookie('token');
             return res.status(404).json({ error: 'User not found.' });
         }
+        const user = userResult.rows[0];
         res.json({ user });
     } catch (error) {
+        console.error('Get user error:', error);
         res.status(500).json({ error: 'Failed to fetch user data.' });
     }
 });
 
 // PUT /api/auth/refresh - Refresh token (extend session)
-router.put('/refresh', authMiddleware, (req, res) => {
+router.put('/refresh', authMiddleware, async (req, res) => {
     try {
-        const user = db.prepare('SELECT id, email, role, plan FROM users WHERE id = ?').get(req.user.id);
-        if (!user) {
+        const userResult = await db.query('SELECT id, public_id, email, role, plan FROM users WHERE id = $1', [req.user.id]);
+        if (userResult.rowCount === 0) {
             return res.status(404).json({ error: 'User not found.' });
         }
+        const user = userResult.rows[0];
 
         const token = jwt.sign(
             { id: user.id, email: user.email, role: user.role, plan: user.plan },
@@ -137,15 +148,11 @@ router.put('/refresh', authMiddleware, (req, res) => {
             { expiresIn: '30m' }
         );
 
-        res.cookie('token', token, {
-            httpOnly: true,
-            secure: false,
-            sameSite: 'lax',
-            maxAge: 30 * 60 * 1000
-        });
+        res.cookie('token', token, getCookieOptions());
 
         res.json({ message: 'Session refreshed.' });
     } catch (error) {
+        console.error('Refresh token error:', error);
         res.status(500).json({ error: 'Session refresh failed.' });
     }
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function Schedules() {
@@ -14,7 +14,7 @@ export default function Schedules() {
     async function fetchAll() {
         try {
             const [schRes, appRes] = await Promise.all([
-                axios.get('/api/schedules'), axios.get('/api/appliances')
+                api.get('/api/schedules'), api.get('/api/appliances')
             ]);
             setSchedules(schRes.data.schedules);
             setAppliances(appRes.data.appliances);
@@ -25,7 +25,7 @@ export default function Schedules() {
     async function handleSubmit(e) {
         e.preventDefault();
         try {
-            await axios.post('/api/schedules', form);
+            await api.post('/api/schedules', form);
             toast.success('Schedule created!');
             setShowForm(false);
             setForm({ appliance_id: '', frequency_days: 90, next_due: '', reminder_days_before: 7 });
@@ -35,7 +35,7 @@ export default function Schedules() {
 
     async function handleUpdate(id, updates) {
         try {
-            await axios.put(`/api/schedules/${id}`, updates);
+            await api.put(`/api/schedules/${id}`, updates);
             toast.success('Schedule updated');
             fetchAll();
         } catch { toast.error('Failed to update'); }
@@ -43,7 +43,7 @@ export default function Schedules() {
 
     async function handleDelete(id) {
         if (!confirm('Delete this schedule?')) return;
-        try { await axios.delete(`/api/schedules/${id}`); toast.success('Deleted'); fetchAll(); }
+        try { await api.delete(`/api/schedules/${id}`); toast.success('Deleted'); fetchAll(); }
         catch { toast.error('Failed'); }
     }
 

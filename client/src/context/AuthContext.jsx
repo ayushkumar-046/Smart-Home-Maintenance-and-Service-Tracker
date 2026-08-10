@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -37,7 +37,7 @@ export function AuthProvider({ children }) {
     useEffect(() => {
         if (!state.user) return;
         const interval = setInterval(() => {
-            axios.put('/api/auth/refresh').catch(() => {
+            api.put('/api/auth/refresh').catch(() => {
                 dispatch({ type: 'LOGOUT' });
             });
         }, 25 * 60 * 1000);
@@ -46,7 +46,7 @@ export function AuthProvider({ children }) {
 
     async function checkAuth() {
         try {
-            const { data } = await axios.get('/api/auth/me');
+            const { data } = await api.get('/api/auth/me');
             dispatch({ type: 'SET_USER', payload: data.user });
         } catch {
             dispatch({ type: 'SET_USER', payload: null });
@@ -56,7 +56,7 @@ export function AuthProvider({ children }) {
     async function login(email, password) {
         dispatch({ type: 'SET_LOADING', payload: true });
         try {
-            const { data } = await axios.post('/api/auth/login', { email, password });
+            const { data } = await api.post('/api/auth/login', { email, password });
             dispatch({ type: 'SET_USER', payload: data.user });
             return data.user;
         } catch (err) {
@@ -69,7 +69,7 @@ export function AuthProvider({ children }) {
     async function register(name, email, password, role) {
         dispatch({ type: 'SET_LOADING', payload: true });
         try {
-            const { data } = await axios.post('/api/auth/register', { name, email, password, role });
+            const { data } = await api.post('/api/auth/register', { name, email, password, role });
             dispatch({ type: 'SET_USER', payload: data.user });
             return data.user;
         } catch (err) {
@@ -81,7 +81,7 @@ export function AuthProvider({ children }) {
 
     async function logout() {
         try {
-            await axios.post('/api/auth/logout');
+            await api.post('/api/auth/logout');
         } catch { }
         dispatch({ type: 'LOGOUT' });
     }

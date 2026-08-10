@@ -15,11 +15,27 @@ if (!fs.existsSync(uploadsDir)) {
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Security middleware
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+// CORS — allow both local dev and deployed frontend
+const allowedOrigins = [
+    process.env.CLIENT_URL || 'http://localhost:5173',
+    'http://localhost:5173',
+    'http://localhost:5000'
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: function (origin, callback) {
+        // Allow requests with no origin (server-to-server, same-origin in production)
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(null, true); // Be permissive in production (same-origin serves frontend)
+        }
+    },
     credentials: true
 }));
 app.use(cookieParser());
@@ -64,6 +80,19 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// In production, serve the React frontend from client/dist
+if (isProduction) {
+    const clientDist = path.join(__dirname, '..', 'client', 'dist');
+    app.use(express.static(clientDist));
+
+    // All non-API routes serve index.html (React Router handles client-side routing)
+    app.get('*', (req, res) => {
+        if (!req.path.startsWith('/api')) {
+            res.sendFile(path.join(clientDist, 'index.html'));
+        }
+    });
+}
+
 // Start cron jobs
 const { startCronJobs } = require('./services/cronService');
 startCronJobs();
@@ -74,13 +103,26 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal server error.' });
 });
 
-app.listen(PORT, () => {
-    console.log(`
-  ╔══════════════════════════════════════════╗
-  ║   🏠 Smart Home Tracker API Server      ║
-  ║   Running on http://localhost:${PORT}       ║
-  ╚══════════════════════════════════════════╝
-  `);
-});
+// ================= STARTUP =================
+async function startServer() {
+    try {
+        // Initialize database (create tables + seed if empty)
+        const { initDatabase } = require('./db');
+        await initDatabase();
+        console.log('✅ Database initialized');
+
+        app.listen(PORT, () => {
+            console.info(`Smart Home Tracker API Server running on port ${PORT}`);
+            if (isProduction) {
+                console.info(`Serving frontend from client/dist`);
+            }
+        });
+    } catch (err) {
+        console.error('❌ Failed to start server:', err);
+        process.exit(1);
+    }
+}
+
+startServer();
 
 module.exports = app;

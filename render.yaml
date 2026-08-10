@@ -1,0 +1,33 @@
+# Render Blueprint — Smart Home Tracker
+# Deploy with: https://render.com/deploy
+
+services:
+  # Backend + Frontend (single service)
+  - type: web
+    name: smart-home-tracker
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && cd server && npm install && cd ../client && npm install && npm run build
+    startCommand: cd server && node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        value: https://smart-home-tracker.onrender.com
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PREMIUM_PRICE_ID
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false

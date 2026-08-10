@@ -5,12 +5,9 @@ const { sendServiceReminder, sendWarrantyExpiryAlert } = require('./emailService
 function startCronJobs() {
     // Run daily at 8:00 AM - check for upcoming service reminders
     cron.schedule('0 8 * * *', () => {
-        console.log('🔄 Running daily service reminder check...');
         checkServiceReminders();
         checkWarrantyExpiry();
     });
-
-    console.log('✅ Cron jobs scheduled (daily at 8:00 AM)');
 }
 
 function checkServiceReminders() {

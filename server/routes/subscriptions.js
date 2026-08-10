@@ -64,7 +64,7 @@ router.post('/activate-mock', authMiddleware, (req, res) => {
         const mockSessionId = `mock_${Date.now()}`;
         db.prepare(`
       INSERT INTO subscriptions (user_id, plan, stripe_session_id, status, start_date, end_date)
-      VALUES (?, 'premium', ?, 'active', date('now'), date('now', '+30 days'))
+            VALUES (?, 'premium', ?, 'active', CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days')
     `).run(req.user.id, mockSessionId);
 
         db.prepare("UPDATE users SET plan = 'premium' WHERE id = ?").run(req.user.id);

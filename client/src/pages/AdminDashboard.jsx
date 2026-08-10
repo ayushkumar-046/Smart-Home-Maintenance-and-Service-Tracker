@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 import toast from 'react-hot-toast';
 
@@ -8,6 +8,9 @@ const COLORS = ['#0ea5e9', '#6366f1', '#f59e0b', '#10b981', '#ef4444'];
 export default function AdminDashboard() {
     const [stats, setStats] = useState(null);
     const [users, setUsers] = useState([]);
+    const [properties, setProperties] = useState([]);
+    const [appliances, setAppliances] = useState([]);
+    const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showUserModal, setShowUserModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -18,14 +21,20 @@ export default function AdminDashboard() {
 
     async function fetchAll() {
         try {
-            const [statsRes, usersRes, catRes] = await Promise.all([
-                axios.get('/api/admin/stats'),
-                axios.get('/api/admin/users'),
-                axios.get('/api/admin/categories')
+            const [statsRes, usersRes, catRes, propertiesRes, appliancesRes, schedulesRes] = await Promise.all([
+                api.get('/api/admin/stats'),
+                api.get('/api/admin/users'),
+                api.get('/api/admin/categories'),
+                api.get('/api/admin/properties'),
+                api.get('/api/admin/appliances'),
+                api.get('/api/admin/schedules')
             ]);
             setStats(statsRes.data);
             setUsers(usersRes.data.users);
             setCategories(catRes.data.categories);
+            setProperties(propertiesRes.data.properties);
+            setAppliances(appliancesRes.data.appliances);
+            setSchedules(schedulesRes.data.schedules);
         } catch (err) {
             toast.error('Failed to load admin data');
         } finally {
@@ -35,7 +44,7 @@ export default function AdminDashboard() {
 
     async function updateRole(userId, role) {
         try {
-            await axios.put(`/api/admin/users/${userId}/role`, { role });
+            await api.put(`/api/admin/users/${userId}/role`, { role });
             toast.success('User role updated');
             fetchAll();
         } catch (err) {
@@ -46,7 +55,7 @@ export default function AdminDashboard() {
     async function deleteUser(userId) {
         if (!confirm('Are you sure you want to delete this user?')) return;
         try {
-            await axios.delete(`/api/admin/users/${userId}`);
+            await api.delete(`/api/admin/users/${userId}`);
             toast.success('User deleted');
             fetchAll();
         } catch (err) {
@@ -57,7 +66,7 @@ export default function AdminDashboard() {
     async function addCategory() {
         if (!newCategory.trim()) return;
         try {
-            await axios.post('/api/admin/categories', { name: newCategory });
+            await api.post('/api/admin/categories', { name: newCategory });
             toast.success('Category added');
             setNewCategory('');
             fetchAll();
@@ -68,7 +77,7 @@ export default function AdminDashboard() {
 
     async function deleteCategory(id) {
         try {
-            await axios.delete(`/api/admin/categories/${id}`);
+            await api.delete(`/api/admin/categories/${id}`);
             toast.success('Category deleted');
             fetchAll();
         } catch (err) {
@@ -78,7 +87,7 @@ export default function AdminDashboard() {
 
     async function downloadReport() {
         try {
-            const response = await axios.get('/api/admin/report', { responseType: 'arraybuffer' });
+            const response = await api.get('/api/admin/report', { responseType: 'arraybuffer' });
             const blob = new Blob([response.data], { type: 'application/pdf' });
             const url = window.URL.createObjectURL(blob);
             // Open PDF in a new browser tab for viewing
@@ -165,6 +174,73 @@ export default function AdminDashboard() {
                 </div>
             </div>
 
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-4">Properties</h3>
+                    <div className="space-y-3 max-h-80 overflow-auto pr-1">
+                        {properties.slice(0, 6).map(property => (
+                            <div key={property.id} className="border border-slate-100 rounded-lg p-3">
+                                <p className="font-medium text-navy-900">{property.name}</p>
+                                <p className="text-xs text-slate-500">{property.owner_name} · {property.size_sqft || 0} sq ft</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-4">Appliances</h3>
+                    <div className="space-y-3 max-h-80 overflow-auto pr-1">
+                        {appliances.slice(0, 6).map(appliance => (
+                            <div key={appliance.id} className="border border-slate-100 rounded-lg p-3">
+                                <p className="font-medium text-navy-900">{appliance.name}</p>
+                                <p className="text-xs text-slate-500">{appliance.owner_name} · {appliance.property_name}</p>
+                                <p className="text-xs text-slate-500 capitalize">Condition: {appliance.condition || 'good'}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-4">Schedules</h3>
+                    <div className="space-y-3 max-h-80 overflow-auto pr-1">
+                        {schedules.slice(0, 6).map(schedule => (
+                            <div key={schedule.id} className="border border-slate-100 rounded-lg p-3">
+                                <p className="font-medium text-navy-900">{schedule.appliance_name}</p>
+                                <p className="text-xs text-slate-500">{schedule.owner_name} · Due {schedule.next_due}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {stats?.providerPerformance?.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-semibold text-navy-900 mb-4">Provider Performance</h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-slate-50">
+                                <tr>
+                                    <th className="text-left px-4 py-3">Provider</th>
+                                    <th className="text-left px-4 py-3">Assigned</th>
+                                    <th className="text-left px-4 py-3">Completed</th>
+                                    <th className="text-left px-4 py-3">Rating</th>
+                                    <th className="text-left px-4 py-3">Earnings</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {stats.providerPerformance.map(provider => (
+                                    <tr key={provider.id}>
+                                        <td className="px-4 py-3">{provider.name}</td>
+                                        <td className="px-4 py-3">{provider.assigned_jobs || 0}</td>
+                                        <td className="px-4 py-3">{provider.completed_jobs || 0}</td>
+                                        <td className="px-4 py-3">{Number(provider.avg_rating || 0).toFixed(1)}</td>
+                                        <td className="px-4 py-3">₹{Number(provider.earnings || 0).toFixed(0)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
             {/* Users table */}
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-100">
@@ -174,6 +250,7 @@ export default function AdminDashboard() {
                     <table className="w-full text-sm">
                         <thead className="bg-slate-50">
                             <tr>
+                                <th className="text-left px-4 py-3 font-semibold text-slate-600">User ID</th>
                                 <th className="text-left px-4 py-3 font-semibold text-slate-600">Name</th>
                                 <th className="text-left px-4 py-3 font-semibold text-slate-600">Email</th>
                                 <th className="text-left px-4 py-3 font-semibold text-slate-600">Role</th>
@@ -184,6 +261,7 @@ export default function AdminDashboard() {
                         <tbody className="divide-y divide-slate-100">
                             {users.map(u => (
                                 <tr key={u.id} className="hover:bg-slate-50 transition">
+                                    <td className="px-4 py-3 text-slate-600 font-mono text-xs">{u.public_id || `USR-${u.id}`}</td>
                                     <td className="px-4 py-3 font-medium text-navy-900">{u.name}</td>
                                     <td className="px-4 py-3 text-slate-600">{u.email}</td>
                                     <td className="px-4 py-3">

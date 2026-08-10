@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { HiOutlineCheck, HiOutlineLightningBolt } from 'react-icons/hi';
 import toast from 'react-hot-toast';
@@ -28,7 +28,7 @@ export default function Subscription() {
 
     async function fetchSubscription() {
         try {
-            const { data } = await axios.get('/api/subscriptions');
+            const { data } = await api.get('/api/subscriptions');
             setSubscription(data.subscription);
             setLimits(data.limits);
         } catch { toast.error('Failed to load'); }
@@ -38,7 +38,7 @@ export default function Subscription() {
     async function handleCheckout() {
         setCheckoutLoading(true);
         try {
-            const { data } = await axios.post('/api/subscriptions/checkout');
+            const { data } = await api.post('/api/subscriptions/checkout');
             if (data.mock) {
                 toast.success('🎉 Premium activated (development mode)!');
                 checkAuth();
@@ -52,7 +52,7 @@ export default function Subscription() {
 
     async function handleMockActivate() {
         try {
-            await axios.post('/api/subscriptions/activate-mock');
+            await api.post('/api/subscriptions/activate-mock');
             toast.success('Premium activated!');
             checkAuth();
             fetchSubscription();
@@ -61,7 +61,7 @@ export default function Subscription() {
 
     async function downloadReceipt(subId) {
         try {
-            const response = await axios.get(`/api/subscriptions/receipt/${subId}`, { responseType: 'arraybuffer' });
+            const response = await api.get(`/api/subscriptions/receipt/${subId}`, { responseType: 'arraybuffer' });
             const blob = new Blob([response.data], { type: 'application/pdf' });
             const url = window.URL.createObjectURL(blob);
             window.open(url, '_blank');

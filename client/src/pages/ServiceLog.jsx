@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import ServiceCard from '../components/ServiceCard';
 import toast from 'react-hot-toast';
@@ -19,9 +19,9 @@ export default function ServiceLog() {
     async function fetchAll() {
         try {
             const [svcRes, appRes, venRes] = await Promise.all([
-                axios.get('/api/services' + (statusFilter ? `?status=${statusFilter}` : '')),
-                axios.get('/api/appliances').catch(() => ({ data: { appliances: [] } })),
-                axios.get('/api/vendors').catch(() => ({ data: { vendors: [] } }))
+                api.get('/api/services' + (statusFilter ? `?status=${statusFilter}` : '')),
+                api.get('/api/appliances').catch(() => ({ data: { appliances: [] } })),
+                api.get('/api/vendors').catch(() => ({ data: { vendors: [] } }))
             ]);
             setServices(svcRes.data.services);
             setAppliances(appRes.data.appliances);
@@ -35,7 +35,7 @@ export default function ServiceLog() {
     async function handleSubmit(e) {
         e.preventDefault();
         try {
-            await axios.post('/api/services', { ...form, cost: form.cost ? parseFloat(form.cost) : 0 });
+            await api.post('/api/services', { ...form, cost: form.cost ? parseFloat(form.cost) : 0 });
             toast.success('Service scheduled!');
             setShowForm(false);
             setForm({ appliance_id: '', vendor_id: '', scheduled_date: '', cost: '', notes: '' });
@@ -45,7 +45,7 @@ export default function ServiceLog() {
 
     async function handleStatusUpdate(id, status) {
         try {
-            await axios.put(`/api/services/${id}/status`, { status });
+            await api.put(`/api/services/${id}/status`, { status });
             toast.success(`Status updated to ${status}!`);
             fetchAll();
         } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
@@ -56,7 +56,7 @@ export default function ServiceLog() {
         if (!rating || isNaN(rating) || rating < 1 || rating > 5) return;
         const comment = prompt('Leave a comment (optional):');
         try {
-            await axios.post(`/api/services/${serviceId}/feedback`, { rating: parseInt(rating), comment });
+            await api.post(`/api/services/${serviceId}/feedback`, { rating: parseInt(rating), comment });
             toast.success('Feedback submitted!');
         } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
     }

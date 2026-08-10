@@ -8,8 +8,8 @@ const { generateServiceReport } = require('../services/pdfService');
 // GET /api/admin/users - Get all users
 router.get('/users', authMiddleware, isAdmin, (req, res) => {
     try {
-        const users = db.prepare(`
-      SELECT id, name, email, role, plan, created_at FROM users
+                const users = db.prepare(`
+            SELECT id, public_id, name, email, role, plan, created_at FROM users
       ORDER BY created_at DESC
     `).all();
         res.json({ users });
@@ -71,6 +71,8 @@ router.get('/stats', authMiddleware, isAdmin, (req, res) => {
         const totalAppliances = db.prepare('SELECT COUNT(*) as count FROM appliances').get().count;
         const totalServices = db.prepare('SELECT COUNT(*) as count FROM service_logs').get().count;
         const totalVendors = db.prepare('SELECT COUNT(*) as count FROM vendors').get().count;
+                const totalSchedules = db.prepare('SELECT COUNT(*) as count FROM schedules').get().count;
+                const totalProviders = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'service_provider'").get().count;
 
         const totalRevenue = db.prepare(`
       SELECT SUM(sl.cost) as total FROM service_logs sl WHERE sl.status = 'completed'
@@ -80,12 +82,34 @@ router.get('/stats', authMiddleware, isAdmin, (req, res) => {
       SELECT COUNT(*) as count FROM subscriptions WHERE status = 'active'
     `).get().count * 499;
 
+                const expenseByYear = db.prepare(`
+                    SELECT EXTRACT(YEAR FROM completed_date::date)::text as year, SUM(cost) as total_cost
+                    FROM service_logs
+                    WHERE status = 'completed' AND completed_date IS NOT NULL
+                    GROUP BY year ORDER BY year DESC
+                `).all();
+
+                const providerPerformance = db.prepare(`
+            SELECT u.id, u.public_id, u.name, u.email,
+            COUNT(sl.id) as assigned_jobs,
+            SUM(CASE WHEN sl.status = 'completed' THEN 1 ELSE 0 END) as completed_jobs,
+            COALESCE(AVG(f.rating), 0) as avg_rating,
+            COALESCE(SUM(CASE WHEN sl.status = 'completed' THEN sl.cost ELSE 0 END), 0) as earnings
+            FROM users u
+            LEFT JOIN service_logs sl ON sl.provider_id = u.id
+            LEFT JOIN feedback f ON f.service_log_id = sl.id
+            WHERE u.role = 'service_provider'
+            GROUP BY u.id
+            ORDER BY earnings DESC
+            LIMIT 10
+        `).all();
+
         // Jobs by month
-        const jobsByMonth = db.prepare(`
-      SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count
-      FROM service_logs
-      GROUP BY month ORDER BY month DESC LIMIT 12
-    `).all();
+                const jobsByMonth = db.prepare(`
+            SELECT TO_CHAR(created_at::date, 'YYYY-MM') as month, COUNT(*) as count
+            FROM service_logs
+            GROUP BY month ORDER BY month DESC LIMIT 12
+        `).all();
 
         // Users by role
         const usersByRole = db.prepare(`
@@ -103,12 +127,58 @@ router.get('/stats', authMiddleware, isAdmin, (req, res) => {
 
         res.json({
             totalUsers, activeUsers, premiumUsers, totalProperties, totalAppliances,
-            totalServices, totalVendors, totalRevenue, subscriptionRevenue,
-            jobsByMonth, usersByRole, recentServices
+            totalServices, totalVendors, totalSchedules, totalProviders, totalRevenue, subscriptionRevenue,
+            expenseByYear, jobsByMonth, usersByRole, recentServices, providerPerformance
         });
     } catch (error) {
         console.error('Admin stats error:', error);
         res.status(500).json({ error: 'Failed to fetch stats.' });
+    }
+});
+
+router.get('/properties', authMiddleware, isAdmin, (req, res) => {
+    try {
+        const properties = db.prepare(`
+      SELECT p.*, u.name as owner_name,
+      (SELECT COUNT(*) FROM appliances WHERE property_id = p.id) as appliance_count
+      FROM properties p
+      JOIN users u ON p.user_id = u.id
+      ORDER BY p.created_at DESC
+    `).all();
+        res.json({ properties });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch properties.' });
+    }
+});
+
+router.get('/appliances', authMiddleware, isAdmin, (req, res) => {
+    try {
+        const appliances = db.prepare(`
+      SELECT a.*, p.name as property_name, u.name as owner_name
+      FROM appliances a
+      JOIN properties p ON a.property_id = p.id
+      JOIN users u ON p.user_id = u.id
+      ORDER BY a.id DESC
+    `).all();
+        res.json({ appliances });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch appliances.' });
+    }
+});
+
+router.get('/schedules', authMiddleware, isAdmin, (req, res) => {
+    try {
+        const schedules = db.prepare(`
+      SELECT s.*, a.name as appliance_name, p.name as property_name, u.name as owner_name
+      FROM schedules s
+      JOIN appliances a ON s.appliance_id = a.id
+      JOIN properties p ON a.property_id = p.id
+      JOIN users u ON p.user_id = u.id
+      ORDER BY s.next_due ASC
+    `).all();
+        res.json({ schedules });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch schedules.' });
     }
 });
 

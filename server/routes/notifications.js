@@ -12,7 +12,7 @@ router.get('/', authMiddleware, (req, res) => {
     `).all(req.user.id);
 
         const unreadCount = db.prepare(
-            'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = 0'
+                        'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND read = false'
         ).get(req.user.id);
 
         res.json({ notifications, unreadCount: unreadCount.count });
@@ -24,7 +24,7 @@ router.get('/', authMiddleware, (req, res) => {
 // PUT /api/notifications/:id/read
 router.put('/:id/read', authMiddleware, (req, res) => {
     try {
-        db.prepare('UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?')
+        db.prepare('UPDATE notifications SET read = true WHERE id = ? AND user_id = ?')
             .run(req.params.id, req.user.id);
         res.json({ message: 'Notification marked as read.' });
     } catch (error) {
@@ -35,7 +35,7 @@ router.put('/:id/read', authMiddleware, (req, res) => {
 // PUT /api/notifications/read-all
 router.put('/read-all', authMiddleware, (req, res) => {
     try {
-        db.prepare('UPDATE notifications SET read = 1 WHERE user_id = ?').run(req.user.id);
+        db.prepare('UPDATE notifications SET read = true WHERE user_id = ?').run(req.user.id);
         res.json({ message: 'All notifications marked as read.' });
     } catch (error) {
         res.status(500).json({ error: 'Failed to update notifications.' });
