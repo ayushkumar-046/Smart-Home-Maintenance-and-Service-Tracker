@@ -14,7 +14,7 @@ router.get('/', authMiddleware, async (req, res) => {
                 (SELECT COUNT(*) FROM appliances WHERE property_id = p.id) as appliance_count
                 FROM properties p
                 JOIN users u ON p.user_id = u.id
-                ORDER BY p.created_at DESC
+                ORDER BY p.id DESC
             `);
             properties = result.rows;
         } else {
@@ -23,7 +23,7 @@ router.get('/', authMiddleware, async (req, res) => {
                 (SELECT COUNT(*) FROM appliances WHERE property_id = p.id) as appliance_count
                 FROM properties p
                 WHERE p.user_id = $1
-                ORDER BY p.created_at DESC
+                ORDER BY p.id DESC
             `, [req.user.id]);
             properties = result.rows;
         }
