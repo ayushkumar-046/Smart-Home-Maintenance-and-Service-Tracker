@@ -116,27 +116,27 @@ This starts both the backend (http://localhost:5000) and frontend (http://localh
 
 | Role | User ID | Email | Password |
 |------|---------|-------|----------|
-| Admin | ADM-0001 | admin@smarthome.com | Admin@123 |
-| Homeowner | HOM-0001 | homeowner1@smarthome.com | Homeowner1@123 |
-| Homeowner | HOM-0002 | homeowner2@smarthome.com | Homeowner2@123 |
-| Homeowner | HOM-0003 | homeowner3@smarthome.com | Homeowner3@123 |
-| Homeowner | HOM-0004 | homeowner4@smarthome.com | Homeowner4@123 |
-| Homeowner | HOM-0005 | homeowner5@smarthome.com | Homeowner5@123 |
-| Homeowner | HOM-0006 | homeowner6@smarthome.com | Homeowner6@123 |
-| Homeowner | HOM-0007 | homeowner7@smarthome.com | Homeowner7@123 |
-| Homeowner | HOM-0008 | homeowner8@smarthome.com | Homeowner8@123 |
-| Homeowner | HOM-0009 | homeowner9@smarthome.com | Homeowner9@123 |
-| Homeowner | HOM-0010 | homeowner10@smarthome.com | Homeowner10@123 |
-| Service Provider | PRV-0001 | provider1@smarthome.com | Provider1@123 |
-| Service Provider | PRV-0002 | provider2@smarthome.com | Provider2@123 |
-| Service Provider | PRV-0003 | provider3@smarthome.com | Provider3@123 |
-| Service Provider | PRV-0004 | provider4@smarthome.com | Provider4@123 |
-| Service Provider | PRV-0005 | provider5@smarthome.com | Provider5@123 |
-| Service Provider | PRV-0006 | provider6@smarthome.com | Provider6@123 |
-| Service Provider | PRV-0007 | provider7@smarthome.com | Provider7@123 |
-| Service Provider | PRV-0008 | provider8@smarthome.com | Provider8@123 |
-| Service Provider | PRV-0009 | provider9@smarthome.com | Provider9@123 |
-| Service Provider | PRV-0010 | provider10@smarthome.com | Provider10@123 |
+| Admin | ADM-XXXX | admin@smarthome.com | Admin@123 |
+| Homeowner | HOM-XXXX | alice.smith@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | bob.jones@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | carol.white@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | david.brown@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | emma.davis@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | frank.wilson@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | grace.taylor@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | henry.moore@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | ivy.clark@example.com | Homeowner@123 |
+| Homeowner | HOM-XXXX | jack.evans@example.com | Homeowner@123 |
+| Service Provider | PRV-XXXX | paul.plumbing@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | sarah.electrical@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | mike.hvac@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | tom.contracting@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | linda.cleaning@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | gary.fixit@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | rosa.painting@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | kevin.roofing@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | steve.security@example.com | Provider@123 |
+| Service Provider | PRV-XXXX | anita.tech@example.com | Provider@123 |
 
 ## 📁 Project Structure
 
