@@ -67,9 +67,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
         // Get service history
         const serviceHistoryResult = await db.query(`
-            SELECT sl.*, v.name as vendor_name
+            SELECT sl.*
             FROM service_logs sl
-            LEFT JOIN vendors v ON sl.vendor_id = v.id
             WHERE sl.appliance_id = $1
             ORDER BY sl.created_at DESC
         `, [req.params.id]);

@@ -17,12 +17,11 @@ router.get('/', authMiddleware, async (req, res) => {
 
         if (req.user.role === 'admin') {
             query = `
-        SELECT sl.*, a.name as appliance_name, a.category, v.name as vendor_name,
+        SELECT sl.*, a.name as appliance_name, a.category,
         p.name as property_name, u.name as homeowner_name, pr.name as provider_name
         FROM service_logs sl
         JOIN appliances a ON sl.appliance_id = a.id
         JOIN properties p ON a.property_id = p.id
-        LEFT JOIN vendors v ON sl.vendor_id = v.id
         LEFT JOIN users u ON sl.user_id = u.id
         LEFT JOIN users pr ON sl.provider_id = pr.id
         WHERE 1=1
@@ -30,24 +29,22 @@ router.get('/', authMiddleware, async (req, res) => {
             params = [];
         } else if (req.user.role === 'service_provider') {
             query = `
-        SELECT sl.*, a.name as appliance_name, a.category, v.name as vendor_name,
+        SELECT sl.*, a.name as appliance_name, a.category,
         p.name as property_name, u.name as homeowner_name
         FROM service_logs sl
         JOIN appliances a ON sl.appliance_id = a.id
         JOIN properties p ON a.property_id = p.id
-        LEFT JOIN vendors v ON sl.vendor_id = v.id
         LEFT JOIN users u ON sl.user_id = u.id
         WHERE sl.provider_id = ?
       `;
             params = [req.user.id];
         } else {
             query = `
-        SELECT sl.*, a.name as appliance_name, a.category, v.name as vendor_name,
+        SELECT sl.*, a.name as appliance_name, a.category,
         p.name as property_name, pr.name as provider_name
         FROM service_logs sl
         JOIN appliances a ON sl.appliance_id = a.id
         JOIN properties p ON a.property_id = p.id
-        LEFT JOIN vendors v ON sl.vendor_id = v.id
         LEFT JOIN users pr ON sl.provider_id = pr.id
         WHERE sl.user_id = ?
       `;
@@ -173,12 +170,11 @@ router.get('/provider/stats', authMiddleware, async (req, res) => {
 router.get('/:id', authMiddleware, async (req, res) => {
     try {
         const serviceRes = await db.query(`
-      SELECT sl.*, a.name as appliance_name, a.category, v.name as vendor_name,
+      SELECT sl.*, a.name as appliance_name, a.category,
       p.name as property_name
       FROM service_logs sl
       JOIN appliances a ON sl.appliance_id = a.id
       JOIN properties p ON a.property_id = p.id
-      LEFT JOIN vendors v ON sl.vendor_id = v.id
       WHERE sl.id = $1
     `, [req.params.id]);
 
@@ -234,9 +230,9 @@ router.post('/', authMiddleware, async (req, res) => {
         }
 
         const insertRes = await db.query(`
-      INSERT INTO service_logs (appliance_id, vendor_id, user_id, provider_id, status, cost)
-      VALUES ($1, $2, $3, $4, 'scheduled', $5) RETURNING id
-        `, [appliance_id, vendor_id || null, req.user.id, assignedProviderId, cost || 0]);
+      INSERT INTO service_logs (appliance_id, user_id, provider_id, status, cost)
+      VALUES ($1, $2, $3, 'scheduled', $4) RETURNING id
+        `, [appliance_id, req.user.id, assignedProviderId, cost || 0]);
         
         const newId = insertRes.rows[0].id;
 
@@ -253,10 +249,9 @@ router.post('/', authMiddleware, async (req, res) => {
         }
 
         const serviceRes = await db.query(`
-      SELECT sl.*, a.name as appliance_name, v.name as vendor_name
+      SELECT sl.*, a.name as appliance_name
       FROM service_logs sl
       JOIN appliances a ON sl.appliance_id = a.id
-      LEFT JOIN vendors v ON sl.vendor_id = v.id
       WHERE sl.id = $1
     `, [newId]);
 
